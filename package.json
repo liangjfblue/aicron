@@ -7,7 +7,34 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "desktop:dev": "concurrently -k \"npm run desktop:server\" \"npm run desktop:web\" \"npm run desktop:electron\"",
+    "desktop:server": "PORT=3000 HOST=127.0.0.1 node server/index.js",
+    "desktop:web": "npm --prefix web run dev -- --host 127.0.0.1 --port 5180",
+    "desktop:electron": "wait-on http://127.0.0.1:3000/api/health http://127.0.0.1:5180 && AICRON_DESKTOP_DEV=1 electron desktop/main.cjs",
+    "desktop:build:web": "npm --prefix web run build",
+    "desktop:pack": "npm run desktop:build:web && electron-builder --dir",
+    "desktop:dist": "npm run desktop:build:web && electron-builder"
+  },
+  "build": {
+    "appId": "com.aicron.app",
+    "productName": "AICron",
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "desktop/**/*",
+      "server/**/*",
+      "web/dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "keywords": [],
   "author": "",
@@ -27,6 +54,10 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.8"
+    "concurrently": "^10.0.3",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
+    "vitest": "^4.1.8",
+    "wait-on": "^9.0.10"
   }
 }
