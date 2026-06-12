@@ -40,6 +40,22 @@ function getPreviewCliArgs(engine, prompt) {
     : ['-p', prompt];
 }
 
+function buildPreviewPrompt(prompt) {
+  return [
+    '你正在为 AICron 做一次“测试执行”。',
+    '',
+    '规则：',
+    '1. 只验证用户提供的 Agent 任务模板是否能被理解并执行。',
+    '2. 不要提及你的运行目录、系统路径、本地文件、当前项目、工具权限或环境信息。',
+    '3. 不要主动提出查看文件、修 bug、写代码、分析目录等无关建议。',
+    '4. 如果用户内容只是问候或很短的测试文本，只回复一句简短确认。',
+    '5. 输出控制在 120 字以内。',
+    '',
+    '用户提供的测试内容：',
+    prompt,
+  ].join('\n');
+}
+
 function getPreviewCliPath(app, engine) {
   const envPath = engine === 'codex' ? process.env.CODEX_CLI_PATH : process.env.CLAUDE_CLI_PATH;
   if (envPath) return envPath;
@@ -52,7 +68,7 @@ function getPreviewCliPath(app, engine) {
 function executePreview(app, taskData) {
   const cliEnv = buildCliSpawnEnv();
   const cliPath = resolveCommandPath(getPreviewCliPath(app, taskData.engine), cliEnv.PATH);
-  const args = getPreviewCliArgs(taskData.engine, taskData.prompt_template);
+  const args = getPreviewCliArgs(taskData.engine, buildPreviewPrompt(taskData.prompt_template));
   const timeoutMs = (taskData.timeout_seconds || 60) * 1000;
   const cwd = join(config.DATA_DIR, 'preview-runs');
   mkdirSync(cwd, { recursive: true });
@@ -100,13 +116,55 @@ async function notifyPreview(app, taskData, run) {
   }
   try {
     const notifySvc = new NotifyService(app.db);
-    const result = await notifySvc.notify(taskData, run, settings);
+    const notifyTask = {
+      ...taskData,
+      feishu_mode: taskData.feishu_mode || 'full',
+      feishu_chat_ids: taskData.feishu_chat_ids || '[]',
+      notify_on_change: 0,
+    };
+    const safeRun = {
+      ...run,
+      stdout: buildPreviewNotificationText(taskData, run),
+      summary: run.status === 'succeeded' ? '测试执行完成' : '测试执行未成功',
+    };
+    const result = await notifySvc.notify(notifyTask, safeRun, settings);
     return result?.skipped
       ? { skipped: true, reason: result.reason || '通知已跳过' }
       : { skipped: false, level: result?.level || 'inline' };
   } catch (err) {
     return { skipped: true, reason: err.message || '通知发送失败', error: true };
   }
+}
+
+function buildPreviewNotificationText(taskData, run) {
+  const title = `【${taskData.name || '未命名任务'}】测试执行${run.status === 'succeeded' ? '完成' : '未成功'}`;
+  const lines = [
+    title,
+    '',
+    `状态：${run.status}`,
+    `引擎：${run.engine}`,
+  ];
+  const preview = sanitizePreviewOutput(run.stdout || run.stderr || run.output || '');
+  if (preview) {
+    lines.push('', '输出预览：', preview);
+  }
+  lines.push('', '说明：这是 AICron 测试执行通知，仅用于验证任务与通知配置。');
+  return lines.join('\n');
+}
+
+function sanitizePreviewOutput(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/\/Users\/[^\s，。；;、)）]+/g, '[本地路径]')
+      .replace(/[A-Za-z]:\\Users\\[^\s，。；;、)）]+/g, '[本地路径]')
+      .replace(/\bpreview-runs\b/g, '[预览目录]')
+      .trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join('\n')
+    .slice(0, 300)
+    .trim();
 }
 
 export async function taskRoutes(app) {

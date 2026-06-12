@@ -164,8 +164,15 @@ describe('Task Routes', () => {
       expect(res.json().stdout).toContain('你好');
       expect(res.json().stdout).toContain('PWD=');
       expect(res.json().stdout).toContain('preview-runs');
+      expect(res.json().stdout).toContain('不要提及你的运行目录');
       expect(res.json().stdout).not.toContain('bypassPermissions');
       expect(res.json().notification).toMatchObject({ skipped: false });
+      const { sendRichTextMessage } = await import('../../utils/feishu.js');
+      const sentPost = sendRichTextMessage.mock.calls.at(-1)?.[2];
+      const sentText = sentPost.content.flat().map((part) => part.text || '').join('\n');
+      expect(sentText).not.toContain('/Users/');
+      expect(sentText).not.toContain('preview-runs');
+      expect(sentText).toContain('测试执行通知');
       expect(app.executor.execute).not.toHaveBeenCalled();
       const persistedRuns = getDb().prepare('SELECT COUNT(*) AS count FROM runs').get();
       expect(persistedRuns.count).toBe(0);
