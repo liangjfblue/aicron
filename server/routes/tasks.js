@@ -2,6 +2,9 @@ import { TaskService } from '../services/task.js';
 import { resolveVariables } from '../services/variable.js';
 import { ImportAnalyzer } from '../services/import-analyzer.js';
 import { scheduleTask } from '../services/scheduler.js';
+import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { buildCliSpawnEnv, resolveCommandPath } from '../utils/cli-path.js';
 
 const taskSchema = {
   body: {
@@ -26,6 +29,58 @@ const taskSchema = {
     },
   },
 };
+
+function getPreviewCliArgs(engine, prompt) {
+  return engine === 'codex'
+    ? ['exec', prompt]
+    : ['--permission-mode', 'bypassPermissions', '-p', prompt];
+}
+
+function getPreviewCliPath(app, engine) {
+  const envPath = engine === 'codex' ? process.env.CODEX_CLI_PATH : process.env.CLAUDE_CLI_PATH;
+  if (envPath) return envPath;
+  const settingsKey = engine === 'codex' ? 'codexPath' : 'claudePath';
+  const row = app.db.prepare('SELECT value FROM settings WHERE key = ?').get(settingsKey);
+  const settingsPath = row?.value?.trim();
+  return settingsPath || engine;
+}
+
+function executePreview(app, taskData) {
+  const cliEnv = buildCliSpawnEnv();
+  const cliPath = resolveCommandPath(getPreviewCliPath(app, taskData.engine), cliEnv.PATH);
+  const args = getPreviewCliArgs(taskData.engine, taskData.prompt_template);
+  const timeoutMs = (taskData.timeout_seconds || 60) * 1000;
+
+  return new Promise((resolve) => {
+    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'], env: cliEnv });
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+    const finish = (status, exitCode, error = null) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve({
+        id: `test-run-${randomUUID()}`,
+        task_id: taskData.id,
+        status,
+        engine: taskData.engine,
+        stdout,
+        stderr: error ? `${stderr}${stderr ? '\n' : ''}${error.message}` : stderr,
+        exit_code: exitCode,
+        output: stdout || stderr || error?.message || '',
+      });
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish('timeout', null, new Error('测试执行超时'));
+    }, timeoutMs);
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('close', (code) => finish(code === 0 ? 'succeeded' : 'failed', code));
+    child.on('error', (err) => finish('failed', 1, err));
+  });
+}
 
 export async function taskRoutes(app) {
   const svc = () => new TaskService(app.db);
@@ -117,10 +172,24 @@ export async function taskRoutes(app) {
   });
 
   // Test run (no save)
-  app.post('/api/tasks/test-run', { preHandler: [app.authenticate] }, async (request) => {
-    const taskData = request.body;
-    const run = await app.executor.execute(taskData, { triggerType: 'test' });
-    return run;
+  app.post('/api/tasks/test-run', { preHandler: [app.authenticate] }, async (request, reply) => {
+    try {
+      const taskData = {
+        ...request.body,
+        id: request.body?.id || `test-${randomUUID()}`,
+        name: request.body?.name || '测试执行',
+        prompt_template: request.body?.prompt_template || request.body?.prompt || '',
+        engine: request.body?.engine || 'claude',
+      };
+      if (!taskData.prompt_template.trim()) {
+        return reply.code(400).send({ error: '请输入 Agent 任务模板' });
+      }
+      const run = await executePreview(app, taskData);
+      return run;
+    } catch (err) {
+      request.log.error({ err }, 'Test run failed');
+      return reply.code(400).send({ error: err.message || '测试执行失败' });
+    }
   });
 
   // Dry run (resolve variables only)

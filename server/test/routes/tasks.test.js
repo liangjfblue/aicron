@@ -1,11 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify from 'fastify';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { getDb, closeDb } from '../../db/index.js';
 import { verifyToken } from '../../utils/jwt.js';
 import { authRoutes } from '../../routes/auth.js';
 import { taskRoutes } from '../../routes/tasks.js';
 import { AuthService } from '../../services/auth.js';
 import { TaskService } from '../../services/task.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function buildApp() {
   const app = Fastify();
@@ -27,6 +33,13 @@ async function buildApp() {
     removeJob: vi.fn(),
   });
   app.decorate('executor', {
+    execute: vi.fn(async (taskData) => ({
+      id: 'run-test',
+      task_id: taskData.id,
+      status: 'succeeded',
+      engine: taskData.engine,
+      stdout: 'ok',
+    })),
     executeAsync: vi.fn(() => ({
       run: {
         id: 'run-async',
@@ -109,6 +122,40 @@ describe('Task Routes', () => {
       engine: 'claude',
     });
     expect(app.executor.executeAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('POST /api/tasks/test-run accepts unsaved task data without creating a persisted run', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
+    const cliPath = join(binDir, 'claude');
+    writeFileSync(cliPath, '#!/bin/sh\necho \"$@\"\n');
+    chmodSync(cliPath, 0o755);
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('claudePath', ?)").run(cliPath);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/test-run',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: 'unsaved smoke',
+        prompt_template: '你好',
+        engine: 'claude',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      id: expect.stringMatching(/^test-run-/),
+      status: 'succeeded',
+      engine: 'claude',
+    });
+    try {
+      expect(res.json().stdout).toContain('你好');
+      expect(app.executor.execute).not.toHaveBeenCalled();
+      const persistedRuns = getDb().prepare('SELECT COUNT(*) AS count FROM runs').get();
+      expect(persistedRuns.count).toBe(0);
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+    }
   });
 
   it('POST /api/tasks/import/analyze returns AI import draft', async () => {
