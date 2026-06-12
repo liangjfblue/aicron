@@ -1,0 +1,226 @@
+import { useState, useEffect } from 'react';
+import {
+  getSettings,
+  updateSettings,
+  testEngine,
+  testFeishu,
+} from '../api/client';
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 1000);
+  };
+
+  useEffect(() => {
+    getSettings()
+      .then((data) => setSettings(data || {}))
+      .catch((err) => showToast(err.message, 'error'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const update = (field, value) => {
+    setSettings((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateSettings(settings);
+      showToast('设置已保存');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestEngine = async (path) => {
+    try {
+      const result = await testEngine(path);
+      if (result.success) {
+        showToast(`✓ ${result.output}`, 'success');
+      } else {
+        showToast(`✕ ${result.output || '测试失败'}`, 'error');
+      }
+    } catch (err) {
+      showToast(`✕ ${err.message}`, 'error');
+    }
+  };
+
+  const handleTestFeishu = async () => {
+    const appId = settings?.feishuAppId || '';
+    const appSecret = settings?.feishuAppSecret || '';
+    if (!appId || !appSecret) {
+      showToast('请先填写 App ID 和 Secret', 'error');
+      return;
+    }
+    try {
+      const result = await testFeishu(appId, appSecret);
+      if (result.success) {
+        showToast('✓ 飞书连接成功', 'success');
+      } else {
+        showToast(`✕ ${result.message}`, 'error');
+      }
+    } catch (err) {
+      showToast(`✕ ${err.message}`, 'error');
+    }
+  };
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-tertiary)' }}>加载中...</div>;
+  if (!settings) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-tertiary)' }}>无法加载设置</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '26px', fontWeight: 700 }}>系统设置</h1>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? '保存中...' : '保存设置'}
+        </button>
+      </div>
+
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 999,
+          padding: '14px 28px', borderRadius: 'var(--radius-md)',
+          background: toast.type === 'error' ? 'var(--error-light)' : 'var(--success-light)',
+          color: toast.type === 'error' ? 'var(--error)' : 'var(--success)',
+          fontFamily: 'var(--font-display)', fontSize: '15px', fontWeight: 500,
+          boxShadow: '0 4px 20px rgba(26,25,21,0.12)',
+          border: `1px solid ${toast.type === 'error' ? 'var(--error)' : 'var(--success)'}`,
+        }}>
+          {toast.message}
+        </div>
+      )}
+
+      {/* 执行引擎 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>⚡ 执行引擎</h2>
+        <div style={{ ...styles.row, gridTemplateColumns: '200px 500px auto' }}>
+          <label style={styles.label}>Claude CLI 路径</label>
+          <input className="form-input" value={settings.claudePath || ''} onChange={(e) => update('claudePath', e.target.value)} placeholder="/usr/local/bin/claude" style={styles.input} />
+          <button className="btn" style={{ fontSize: '13px' }} onClick={() => handleTestEngine(settings.claudePath || 'claude')}>测试</button>
+        </div>
+        <div style={{ ...styles.row, gridTemplateColumns: '200px 500px auto' }}>
+          <label style={styles.label}>Codex CLI 路径</label>
+          <input className="form-input" value={settings.codexPath || ''} onChange={(e) => update('codexPath', e.target.value)} placeholder="/usr/local/bin/codex" style={styles.input} />
+          <button className="btn" style={{ fontSize: '13px' }} onClick={() => handleTestEngine(settings.codexPath || 'codex')}>测试</button>
+        </div>
+      </section>
+
+      {/* 飞书应用 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>💬 飞书应用</h2>
+        <div style={styles.row}>
+          <label style={styles.label}>App ID</label>
+          <input className="form-input" value={settings.feishuAppId || ''} onChange={(e) => update('feishuAppId', e.target.value)} placeholder="cli_xxxxxxxx" style={styles.input} />
+        </div>
+        <div style={styles.row}>
+          <label style={styles.label}>App Secret</label>
+          <input className="form-input" type="password" value={settings.feishuAppSecret || ''} onChange={(e) => update('feishuAppSecret', e.target.value)} placeholder="飞书应用密钥" style={styles.input} />
+          <button className="btn" style={{ fontSize: '13px' }} onClick={handleTestFeishu}>验证</button>
+        </div>
+        <div style={styles.row}>
+          <label style={styles.label}>默认群聊 ID</label>
+          <input className="form-input" value={settings.defaultChatId || ''} onChange={(e) => update('defaultChatId', e.target.value)} placeholder="oc_xxxxxxxxxxxxxxxx" style={styles.input} />
+        </div>
+      </section>
+
+      {/* 数据存储 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>📂 数据存储</h2>
+        <div style={styles.row}>
+          <label style={styles.label}>结果目录</label>
+          <input className="form-input" value={settings.resultsDir || '~/.aicron/data/runs'} onChange={(e) => update('resultsDir', e.target.value)} style={styles.input} />
+        </div>
+        <div style={styles.row}>
+          <label style={styles.label}>保留策略</label>
+          <select className="form-input" value={settings.retention || 'keep-all'} onChange={(e) => update('retention', e.target.value)} style={{ ...styles.input, fontFamily: 'var(--font-display)' }}>
+            <option value="keep-all">永久保留</option>
+            <option value="30d">最近 30 天</option>
+            <option value="90d">最近 90 天</option>
+            <option value="100-per-task">每个任务最近 100 次</option>
+          </select>
+        </div>
+      </section>
+
+      {/* Skill 接口 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>🤖 Skill 接口（供 Hermes 调用）</h2>
+        <div style={styles.row}>
+          <label style={styles.label}>API 地址</label>
+          <code style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--accent)', background: 'var(--accent-light)', padding: '5px 10px', borderRadius: '2px' }}>http://localhost:3000/api/skill/*</code>
+          <button className="btn" style={{ fontSize: '13px' }} onClick={() => navigator.clipboard.writeText('http://localhost:3000/api/skill/*')}>复制</button>
+        </div>
+        <div style={styles.row}>
+          <label style={styles.label}>认证令牌</label>
+          <input className="form-input" type="text" value={settings.skillToken || ''} onChange={(e) => update('skillToken', e.target.value)} placeholder="sk-aicron-xxxx" style={styles.input} />
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button className="btn" style={{ fontSize: '13px' }} onClick={() => {
+              const token = 'sk-aicron-' + Math.random().toString(36).slice(2, 18);
+              update('skillToken', token);
+              navigator.clipboard.writeText(token).catch(() => {});
+              showToast('令牌已生成并复制到剪贴板');
+            }}>生成并复制</button>
+            {settings.skillToken && (
+              <button className="btn" style={{ fontSize: '13px' }} onClick={() => {
+                navigator.clipboard.writeText(settings.skillToken).catch(() => {});
+                showToast('已复制到剪贴板');
+              }}>复制</button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 账号安全 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>🔐 账号安全</h2>
+        <div style={styles.row}>
+          <label style={styles.label}>会话有效期</label>
+          <span style={{ fontSize: '15px' }}>3 天</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const styles = {
+  section: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    padding: '24px 28px',
+    marginBottom: '18px',
+  },
+  sectionTitle: {
+    fontFamily: 'var(--font-display)',
+    fontSize: '17px',
+    fontWeight: 600,
+    marginBottom: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '200px 400px auto',
+    gap: '14px',
+    alignItems: 'center',
+    padding: '10px 0',
+    borderBottom: '1px solid var(--bg)',
+  },
+  label: {
+    fontFamily: 'var(--font-display)',
+    fontSize: '15px',
+    color: 'var(--ink-secondary)',
+  },
+  input: {
+    fontSize: '14px',
+    fontFamily: 'var(--font-mono)',
+  },
+};
