@@ -152,11 +152,19 @@ if [ "$MODE" = "dev" ]; then
       fi
 
       say "▶ 启动前端: $FRONTEND_URL"
-      (cd "$ROOT/web" && nohup npx vite --host "$HOST" --port "$FRONTEND_PORT" > "$LOG_DIR/frontend.log" 2>&1 & echo $! > "$PID_DIR/frontend.pid")
+      (
+        cd "$ROOT/web"
+        if [ -x "./node_modules/.bin/vite" ]; then
+          nohup ./node_modules/.bin/vite --host "$HOST" --port "$FRONTEND_PORT" > "$LOG_DIR/frontend.log" 2>&1 &
+        else
+          nohup npx vite --host "$HOST" --port "$FRONTEND_PORT" > "$LOG_DIR/frontend.log" 2>&1 &
+        fi
+        echo $! > "$PID_DIR/frontend.pid"
+      )
       FRONTEND_PID=$(cat "$PID_DIR/frontend.pid")
       say "  前端 PID: $FRONTEND_PID"
 
-      if ! wait_for_url "$FRONTEND_URL" "前端"; then
+      if ! wait_for_url "$FRONTEND_URL/api/health" "前端代理"; then
         echo "❌ 前端启动超时，请查看 $LOG_DIR/frontend.log"
         kill "$FRONTEND_PID" 2>/dev/null || true
         rm -f "$PID_DIR/frontend.pid"
