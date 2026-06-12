@@ -90,6 +90,44 @@ cd web && npm run dev
 
 默认账号：`admin` / `admin123`
 
+## 桌面版开发
+
+AICron 桌面版使用 Electron 包装现有 Web UI 和 Fastify 后端。核心任务逻辑仍在 `server/` 中，桌面壳只负责窗口、托盘、菜单、开机自启动和桌面通知。
+
+### 开发启动
+
+```bash
+npm install
+cd web && npm install && cd ..
+npm run desktop:dev
+```
+
+开发模式会启动：
+
+- 后端：`http://127.0.0.1:3000`
+- 前端：`http://127.0.0.1:5180`
+- Electron 桌面壳
+
+### 打包预览
+
+```bash
+npm run desktop:pack
+```
+
+生成目录在 `desktop-dist/`。正式分发可使用：
+
+```bash
+npm run desktop:dist
+```
+
+### 桌面版验收点
+
+- 只能打开一个 AICron 实例，重复启动会聚焦已有窗口。
+- 关闭窗口后应用仍在托盘运行。
+- 托盘右键菜单可以打开窗口、打开设置、切换开机自启动、退出。
+- 设置页在桌面版显示“桌面应用”区域，在浏览器版不显示。
+- 任务完成后桌面通知弹出，点击通知进入对应执行详情。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |

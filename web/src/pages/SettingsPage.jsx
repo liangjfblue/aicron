@@ -11,6 +11,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [desktop, setDesktop] = useState({
+    available: Boolean(window.aicronDesktop?.isDesktop),
+    startupEnabled: false,
+    loading: Boolean(window.aicronDesktop?.isDesktop),
+  });
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -22,6 +27,13 @@ export default function SettingsPage() {
       .then((data) => setSettings(data || {}))
       .catch((err) => showToast(err.message, 'error'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!window.aicronDesktop?.getStartupEnabled) return;
+    window.aicronDesktop.getStartupEnabled()
+      .then((enabled) => setDesktop({ available: true, startupEnabled: Boolean(enabled), loading: false }))
+      .catch(() => setDesktop({ available: true, startupEnabled: false, loading: false }));
   }, []);
 
   const update = (field, value) => {
@@ -69,6 +81,20 @@ export default function SettingsPage() {
       }
     } catch (err) {
       showToast(`✕ ${err.message}`, 'error');
+    }
+  };
+
+  const handleStartupToggle = async () => {
+    if (!window.aicronDesktop?.setStartupEnabled) return;
+    const next = !desktop.startupEnabled;
+    setDesktop((prev) => ({ ...prev, startupEnabled: next, loading: true }));
+    try {
+      const actual = await window.aicronDesktop.setStartupEnabled(next);
+      setDesktop({ available: true, startupEnabled: Boolean(actual), loading: false });
+      showToast(actual ? '已开启开机自启动' : '已关闭开机自启动');
+    } catch (err) {
+      setDesktop((prev) => ({ ...prev, startupEnabled: !next, loading: false }));
+      showToast(err.message || '自启动设置失败', 'error');
     }
   };
 
@@ -176,6 +202,27 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* 桌面应用 */}
+      {desktop.available && (
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>桌面应用</h2>
+          <div style={styles.row}>
+            <label style={styles.label}>开机自启动</label>
+            <button
+              className={`btn ${desktop.startupEnabled ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ fontSize: '13px', width: '120px' }}
+              onClick={handleStartupToggle}
+              disabled={desktop.loading}
+            >
+              {desktop.loading ? '读取中...' : desktop.startupEnabled ? '已开启' : '未开启'}
+            </button>
+            <span style={{ color: 'var(--ink-tertiary)', fontSize: '13px' }}>
+              关闭窗口后任务仍会在托盘后台运行
+            </span>
+          </div>
+        </section>
+      )}
 
       {/* 账号安全 */}
       <section style={styles.section}>

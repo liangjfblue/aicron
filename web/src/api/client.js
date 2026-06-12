@@ -1,5 +1,24 @@
 const TOKEN_KEY = 'aicron_token';
 
+let desktopApiBasePromise = null;
+
+function normalizeApiBase(base) {
+  return String(base || '').replace(/\/$/, '');
+}
+
+async function getApiBase() {
+  if (!window.aicronDesktop?.getApiBaseUrl) return '';
+  if (!desktopApiBasePromise) {
+    desktopApiBasePromise = window.aicronDesktop.getApiBaseUrl().then(normalizeApiBase).catch(() => '');
+  }
+  return desktopApiBasePromise;
+}
+
+async function apiUrl(path) {
+  const base = await getApiBase();
+  return `${base}${path}`;
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -25,14 +44,14 @@ async function request(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(path, {
+  const res = await fetch(await apiUrl(path), {
     ...options,
     headers,
   });
 
   if (res.status === 401) {
     clearToken();
-    window.location.href = '/login';
+    window.location.hash = '#/login';
     throw new Error('未授权，请重新登录');
   }
 
@@ -96,7 +115,7 @@ export async function analyzeTaskImport(text) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch('/api/tasks/import/analyze', {
+  const res = await fetch(await apiUrl('/api/tasks/import/analyze'), {
     method: 'POST',
     headers,
     body: JSON.stringify({ text }),
@@ -164,7 +183,7 @@ export async function getRunResult(runId) {
   const token = getToken();
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`/api/runs/${runId}/result`, { headers });
+  const res = await fetch(await apiUrl(`/api/runs/${runId}/result`), { headers });
   if (!res.ok) throw new Error('获取结果失败');
   return res.text();
 }

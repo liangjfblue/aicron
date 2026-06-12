@@ -5,3 +5,5 @@ data/
 .superpowers/
 .pids/
 dist-packages/
+desktop-dist/
+.cache/
