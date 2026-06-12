@@ -4,7 +4,10 @@ import { ImportAnalyzer } from '../services/import-analyzer.js';
 import { scheduleTask } from '../services/scheduler.js';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildCliSpawnEnv, resolveCommandPath } from '../utils/cli-path.js';
+import { config } from '../config.js';
 
 const taskSchema = {
   body: {
@@ -33,7 +36,7 @@ const taskSchema = {
 function getPreviewCliArgs(engine, prompt) {
   return engine === 'codex'
     ? ['exec', prompt]
-    : ['--permission-mode', 'bypassPermissions', '-p', prompt];
+    : ['-p', prompt];
 }
 
 function getPreviewCliPath(app, engine) {
@@ -50,9 +53,15 @@ function executePreview(app, taskData) {
   const cliPath = resolveCommandPath(getPreviewCliPath(app, taskData.engine), cliEnv.PATH);
   const args = getPreviewCliArgs(taskData.engine, taskData.prompt_template);
   const timeoutMs = (taskData.timeout_seconds || 60) * 1000;
+  const cwd = join(config.DATA_DIR, 'preview-runs');
+  mkdirSync(cwd, { recursive: true });
 
   return new Promise((resolve) => {
-    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'], env: cliEnv });
+    const child = spawn(cliPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: cliEnv,
+      cwd,
+    });
     let stdout = '';
     let stderr = '';
     let finished = false;

@@ -127,7 +127,7 @@ describe('Task Routes', () => {
   it('POST /api/tasks/test-run accepts unsaved task data without creating a persisted run', async () => {
     const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
     const cliPath = join(binDir, 'claude');
-    writeFileSync(cliPath, '#!/bin/sh\necho \"$@\"\n');
+    writeFileSync(cliPath, '#!/bin/sh\necho \"PWD=$PWD\"\necho \"ARGS=$@\"\n');
     chmodSync(cliPath, 0o755);
     getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('claudePath', ?)").run(cliPath);
 
@@ -150,6 +150,9 @@ describe('Task Routes', () => {
     });
     try {
       expect(res.json().stdout).toContain('你好');
+      expect(res.json().stdout).toContain('PWD=');
+      expect(res.json().stdout).toContain('preview-runs');
+      expect(res.json().stdout).not.toContain('bypassPermissions');
       expect(app.executor.execute).not.toHaveBeenCalled();
       const persistedRuns = getDb().prepare('SELECT COUNT(*) AS count FROM runs').get();
       expect(persistedRuns.count).toBe(0);
