@@ -8,6 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildCliSpawnEnv, resolveCommandPath } from '../utils/cli-path.js';
 import { config } from '../config.js';
+import { NotifyService } from '../services/notify.js';
 
 const taskSchema = {
   body: {
@@ -89,6 +90,23 @@ function executePreview(app, taskData) {
     child.on('close', (code) => finish(code === 0 ? 'succeeded' : 'failed', code));
     child.on('error', (err) => finish('failed', 1, err));
   });
+}
+
+async function notifyPreview(app, taskData, run) {
+  const rows = app.db.prepare('SELECT * FROM settings').all();
+  const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  if (!settings.feishuAppId || !settings.feishuAppSecret) {
+    return { skipped: true, reason: '未配置飞书应用' };
+  }
+  try {
+    const notifySvc = new NotifyService(app.db);
+    const result = await notifySvc.notify(taskData, run, settings);
+    return result?.skipped
+      ? { skipped: true, reason: result.reason || '通知已跳过' }
+      : { skipped: false, level: result?.level || 'inline' };
+  } catch (err) {
+    return { skipped: true, reason: err.message || '通知发送失败', error: true };
+  }
 }
 
 export async function taskRoutes(app) {
@@ -194,7 +212,8 @@ export async function taskRoutes(app) {
         return reply.code(400).send({ error: '请输入 Agent 任务模板' });
       }
       const run = await executePreview(app, taskData);
-      return run;
+      const notification = await notifyPreview(app, taskData, run);
+      return { ...run, notification };
     } catch (err) {
       request.log.error({ err }, 'Test run failed');
       return reply.code(400).send({ error: err.message || '测试执行失败' });

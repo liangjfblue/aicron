@@ -425,7 +425,13 @@ export default function TaskEditorPage() {
       const result = await testRun(toApiTask(task));
       setTestResult(result);
       if (result.status === 'succeeded') {
-        showToast('测试执行完成，不发送飞书通知');
+        if (result.notification?.error) {
+          showToast(`测试执行完成，通知失败：${result.notification.reason || '发送失败'}`, 'error');
+        } else if (result.notification?.skipped) {
+          showToast(`测试执行完成，通知已跳过：${result.notification.reason || '无通知目标'}`);
+        } else {
+          showToast('测试执行完成，飞书通知已发送');
+        }
       } else if (result.status === 'timeout') {
         showToast('测试执行超时', 'error');
       } else {
@@ -1080,7 +1086,7 @@ export default function TaskEditorPage() {
               <h4 style={{ marginBottom: '8px', fontSize: '0.9rem' }}>
                 测试执行结果
                 <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: 'var(--ink-tertiary)', fontWeight: 400 }}>
-                  预览执行，不触发飞书通知
+                  预览执行，会按当前通知配置推送
                 </span>
               </h4>
               <pre style={styles.resultPre}>

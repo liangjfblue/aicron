@@ -13,6 +13,14 @@ import { TaskService } from '../../services/task.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+vi.mock('../../utils/feishu.js', () => ({
+  getAppToken: vi.fn().mockResolvedValue('mock-token'),
+  sendMessage: vi.fn().mockResolvedValue({ code: 0 }),
+  sendRichTextMessage: vi.fn().mockResolvedValue({ code: 0 }),
+  sendFileMessage: vi.fn().mockResolvedValue({ code: 0 }),
+  uploadFile: vi.fn().mockResolvedValue('mock-file-key'),
+}));
+
 async function buildApp() {
   const app = Fastify();
   app.decorate('db', getDb());
@@ -86,6 +94,7 @@ describe('Task Routes', () => {
   beforeEach(async () => {
     app = await buildApp();
     const db = getDb();
+    db.prepare('DELETE FROM settings').run();
     db.prepare('DELETE FROM users').run();
     db.prepare('DELETE FROM runs').run();
     db.prepare('DELETE FROM tasks').run();
@@ -130,6 +139,9 @@ describe('Task Routes', () => {
     writeFileSync(cliPath, '#!/bin/sh\necho \"PWD=$PWD\"\necho \"ARGS=$@\"\n');
     chmodSync(cliPath, 0o755);
     getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('claudePath', ?)").run(cliPath);
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppId', 'id')").run();
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppSecret', 'secret')").run();
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('defaultChatId', 'oc_default')").run();
 
     const res = await app.inject({
       method: 'POST',
@@ -153,9 +165,41 @@ describe('Task Routes', () => {
       expect(res.json().stdout).toContain('PWD=');
       expect(res.json().stdout).toContain('preview-runs');
       expect(res.json().stdout).not.toContain('bypassPermissions');
+      expect(res.json().notification).toMatchObject({ skipped: false });
       expect(app.executor.execute).not.toHaveBeenCalled();
       const persistedRuns = getDb().prepare('SELECT COUNT(*) AS count FROM runs').get();
       expect(persistedRuns.count).toBe(0);
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+    }
+  });
+
+  it('POST /api/tasks/test-run reports skipped notification when target is missing', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
+    const cliPath = join(binDir, 'claude');
+    writeFileSync(cliPath, '#!/bin/sh\necho ok\n');
+    chmodSync(cliPath, 0o755);
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('claudePath', ?)").run(cliPath);
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppId', 'id')").run();
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppSecret', 'secret')").run();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/test-run',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: 'unsaved smoke',
+        prompt_template: '你好',
+        engine: 'claude',
+      },
+    });
+
+    try {
+      expect(res.statusCode).toBe(200);
+      expect(res.json().notification).toMatchObject({
+        skipped: true,
+        reason: '无通知目标',
+      });
     } finally {
       rmSync(binDir, { recursive: true, force: true });
     }
