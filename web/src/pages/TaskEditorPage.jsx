@@ -420,10 +420,17 @@ export default function TaskEditorPage() {
 
   const handleTestRun = async () => {
     setTestResult(null);
+    showToast('测试执行已开始');
     try {
       const result = await testRun(toApiTask(task));
       setTestResult(result);
-      showToast('测试执行完成');
+      if (result.status === 'succeeded') {
+        showToast('测试执行完成');
+      } else if (result.status === 'timeout') {
+        showToast('测试执行超时', 'error');
+      } else {
+        showToast(result.output || result.stderr || '测试执行失败', 'error');
+      }
     } catch (err) {
       showToast(err.message, 'error');
     }
