@@ -266,6 +266,19 @@ export default function SettingsPage() {
               关闭窗口后任务仍会在托盘后台运行
             </span>
           </div>
+          <div style={styles.row}>
+            <label style={styles.label}>启动后最小化到托盘</label>
+            <button
+              className={`btn ${settings.startMinimizedToTray === 'true' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ fontSize: '13px', width: '120px' }}
+              onClick={() => update('startMinimizedToTray', settings.startMinimizedToTray === 'true' ? 'false' : 'true')}
+            >
+              {settings.startMinimizedToTray === 'true' ? '已开启' : '未开启'}
+            </button>
+            <span style={{ color: 'var(--ink-tertiary)', fontSize: '13px' }}>
+              下次启动时不弹出主窗口，任务会在托盘后台运行
+            </span>
+          </div>
         </section>
       )}
 

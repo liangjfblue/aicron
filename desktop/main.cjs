@@ -17,6 +17,7 @@ let tray;
 let serverProcess;
 let serverApp;
 let isQuitting = false;
+let startMinimizedToTray = false;
 
 function setOpenAtLogin(enabled) {
   app.setLoginItemSettings({
@@ -128,6 +129,40 @@ function waitForHealth(url, timeoutMs = 20000) {
   });
 }
 
+function requestJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`Request failed: ${res.statusCode}`));
+          return;
+        }
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(3000, () => {
+      req.destroy(new Error(`Request timed out at ${url}`));
+    });
+  });
+}
+
+async function loadDesktopSettings() {
+  try {
+    const settings = await requestJson(`${API_BASE_URL}/api/settings/public-desktop`);
+    startMinimizedToTray = settings.startMinimizedToTray === 'true' || settings.startMinimizedToTray === true;
+  } catch {
+    startMinimizedToTray = false;
+  }
+}
+
 function notifyRunComplete(task, run) {
   if (!Notification.isSupported()) return;
   const success = run.status === 'succeeded';
@@ -210,7 +245,9 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (!startMinimizedToTray) mainWindow.show();
+  });
 
   if (isDev) {
     mainWindow.loadURL(WEB_DEV_URL);
@@ -339,6 +376,7 @@ app.on('quit', () => {
 app.whenReady().then(async () => {
   try {
     await startServer();
+    await loadDesktopSettings();
     createMenu();
     createTray();
     createWindow();

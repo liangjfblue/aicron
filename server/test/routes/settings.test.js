@@ -97,4 +97,17 @@ describe('Settings Routes', () => {
       source: 'environment',
     });
   });
+
+  it('exposes only desktop startup display settings without auth', async () => {
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('startMinimizedToTray', 'true')").run();
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppSecret', 'secret-value')").run();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/settings/public-desktop',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ startMinimizedToTray: 'true' });
+  });
 });

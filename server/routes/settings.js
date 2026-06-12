@@ -18,6 +18,11 @@ export async function settingsRoutes(app) {
     };
   });
 
+  app.get('/api/settings/public-desktop', async () => {
+    const row = app.db.prepare("SELECT value FROM settings WHERE key = 'startMinimizedToTray'").get();
+    return { startMinimizedToTray: row?.value || 'false' };
+  });
+
   app.put('/api/settings', { preHandler: [app.authenticate] }, async (request) => {
     const stmt = app.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     for (const [key, value] of Object.entries(request.body)) {
