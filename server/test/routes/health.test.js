@@ -80,4 +80,9 @@ describe('Health Routes', () => {
       recent_failure_count: 1,
     });
   });
+
+  it('server module exports a reusable app factory', async () => {
+    const mod = await import('../../index.js');
+    expect(typeof mod.createApp).toBe('function');
+  });
 });

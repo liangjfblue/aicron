@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getTaskScheduleSegments, Scheduler } from '../../services/scheduler.js';
 
 describe('Scheduler', () => {
@@ -29,6 +29,19 @@ describe('Scheduler', () => {
     scheduler.addJob('task-2', '0 9 * * *');
     scheduler.stopAll();
     expect(scheduler.listJobs()).toHaveLength(0);
+  });
+
+  it('should clear every timer when stopping segmented jobs', () => {
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    scheduler.addSegments('task-1', [
+      { cronExpression: '*/1 * * * *' },
+      { cronExpression: '0 9 * * *' },
+    ]);
+
+    scheduler.stopAll();
+
+    expect(clearSpy).toHaveBeenCalledTimes(2);
+    clearSpy.mockRestore();
   });
 
   it('should replace existing job when adding same taskId', () => {

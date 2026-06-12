@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { getDb, closeDb } from './db/index.js';
 import { verifyToken } from './utils/jwt.js';
@@ -15,9 +16,6 @@ import { TaskService } from './services/task.js';
 import { NotifyService } from './services/notify.js';
 import { AuthService } from './services/auth.js';
 
-const app = Fastify({ logger: true });
-
-// Auth middleware — defined at top level so all routes can access it
 async function authenticate(request, reply) {
   const auth = request.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
@@ -30,113 +28,131 @@ async function authenticate(request, reply) {
   }
 }
 
-app.decorate('db', getDb());
-app.decorate('authenticate', authenticate);
-app.register(authRoutes);
-app.register(taskRoutes);
-app.register(runRoutes);
-app.register(settingsRoutes);
-app.register(promptRoutes);
-app.register(skillRoutes);
-app.register(healthRoutes);
+export async function createApp(options = {}) {
+  const app = Fastify({ logger: options.logger ?? true });
+  const db = getDb();
 
-// Initialize executor
-const executor = new Executor(getDb());
+  app.decorate('db', db);
+  app.decorate('authenticate', authenticate);
+  app.register(authRoutes);
+  app.register(taskRoutes);
+  app.register(runRoutes);
+  app.register(settingsRoutes);
+  app.register(promptRoutes);
+  app.register(skillRoutes);
+  app.register(healthRoutes);
 
-// Wire notification into executor
-const notifySvc = new NotifyService(getDb());
-executor.onRunComplete = async (task, run) => {
-  try {
-    const rows = getDb().prepare('SELECT * FROM settings').all();
-    const settings = {};
-    for (const r of rows) settings[r.key] = r.value;
-    if (settings.feishuAppId && settings.feishuAppSecret) {
-      notifySvc.runSvc.addEvent(run.id, 'notifying', '准备发送通知', '执行结果已生成，正在推送飞书', {
-        stage: 'notify',
-        progress: 92,
-        severity: 'info',
-      });
-      const result = await notifySvc.notify(task, run, settings);
-      if (result?.skipped) {
-        notifySvc.runSvc.addEvent(run.id, 'notify_skipped', '通知已跳过', result.reason || '未发送通知', {
+  const executor = new Executor(db);
+  const notifySvc = new NotifyService(db);
+  executor.onRunComplete = async (task, run) => {
+    if (options.onRunComplete) {
+      try {
+        await options.onRunComplete(task, run);
+      } catch (err) {
+        app.log.error({ err }, 'Run completion hook error');
+      }
+    }
+    try {
+      const rows = db.prepare('SELECT * FROM settings').all();
+      const settings = {};
+      for (const r of rows) settings[r.key] = r.value;
+      if (settings.feishuAppId && settings.feishuAppSecret) {
+        notifySvc.runSvc.addEvent(run.id, 'notifying', '准备发送通知', '执行结果已生成，正在推送飞书', {
+          stage: 'notify',
+          progress: 92,
+          severity: 'info',
+        });
+        const result = await notifySvc.notify(task, run, settings);
+        if (result?.skipped) {
+          notifySvc.runSvc.addEvent(run.id, 'notify_skipped', '通知已跳过', result.reason || '未发送通知', {
+            stage: 'notify',
+            progress: 100,
+            severity: 'warn',
+          });
+        } else {
+          notifySvc.runSvc.addEvent(run.id, 'notified', '通知已发送', '飞书消息推送完成', {
+            stage: 'notify',
+            progress: 100,
+            severity: 'success',
+            notification_level: result?.level,
+          });
+        }
+      } else {
+        notifySvc.runSvc.addEvent(run.id, 'notify_skipped', '通知已跳过', '未配置飞书应用', {
           stage: 'notify',
           progress: 100,
           severity: 'warn',
         });
-      } else {
-        notifySvc.runSvc.addEvent(run.id, 'notified', '通知已发送', '飞书消息推送完成', {
-          stage: 'notify',
-          progress: 100,
-          severity: 'success',
-          notification_level: result?.level,
-        });
       }
-    } else {
-      notifySvc.runSvc.addEvent(run.id, 'notify_skipped', '通知已跳过', '未配置飞书应用', {
+    } catch (err) {
+      notifySvc.runSvc.addEvent(run.id, 'notify_failed', '通知失败', err.message, {
         stage: 'notify',
         progress: 100,
-        severity: 'warn',
+        severity: 'error',
       });
+      app.log.error({ err }, 'Notify error');
     }
-  } catch (err) {
-    notifySvc.runSvc.addEvent(run.id, 'notify_failed', '通知失败', err.message, {
-      stage: 'notify',
-      progress: 100,
-      severity: 'error',
-    });
-    app.log.error({ err }, 'Notify error');
+  };
+
+  const scheduler = new Scheduler(async (taskId) => {
+    const taskSvc = new TaskService(db);
+    const task = taskSvc.getById(taskId);
+    if (!task || !task.enabled) return;
+    if (!Scheduler.isTaskActiveNow(task)) return;
+    await executor.execute(task, { triggerType: 'cron' });
+  });
+
+  const taskSvc = new TaskService(db);
+  const tasks = taskSvc.list({ enabled: true });
+  for (const t of tasks) {
+    scheduleTask(scheduler, t);
   }
-};
 
-// Initialize scheduler
-const scheduler = new Scheduler(async (taskId) => {
-  const taskSvc = new TaskService(app.db);
-  const task = taskSvc.getById(taskId);
-  if (!task || !task.enabled) return;
-  if (!Scheduler.isTaskActiveNow(task)) return;
-  await executor.execute(task, { triggerType: 'cron' });
-});
+  app.decorate('executor', executor);
+  app.decorate('scheduler', scheduler);
 
-// Load existing enabled tasks with cron into scheduler
-const taskSvc = new TaskService(getDb());
-const tasks = taskSvc.list({ enabled: true });
-for (const t of tasks) {
-  scheduleTask(scheduler, t);
-}
-
-// Decorate fastify with executor and scheduler
-app.decorate('executor', executor);
-app.decorate('scheduler', scheduler);
-
-// Create default admin user if no users exist
-const authSvc = new AuthService(getDb());
-const existingUser = getDb().prepare('SELECT id FROM users LIMIT 1').get();
-if (!existingUser) {
-  const defaultUser = process.env.ADMIN_USER || 'admin';
-  const defaultPass = process.env.ADMIN_PASS || 'admin123';
-  try {
-    await authSvc.createUser(defaultUser, defaultPass);
-    app.log.info(`默认用户已创建: ${defaultUser} / ${defaultPass}`);
-  } catch (err) {
-    app.log.warn(`创建默认用户失败: ${err.message}`);
+  const authSvc = new AuthService(db);
+  const existingUser = db.prepare('SELECT id FROM users LIMIT 1').get();
+  if (!existingUser) {
+    const defaultUser = process.env.ADMIN_USER || 'admin';
+    const defaultPass = process.env.ADMIN_PASS || 'admin123';
+    try {
+      await authSvc.createUser(defaultUser, defaultPass);
+      app.log.info(`默认用户已创建: ${defaultUser} / ${defaultPass}`);
+    } catch (err) {
+      app.log.warn(`创建默认用户失败: ${err.message}`);
+    }
   }
+
+  app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
+
+  app.addHook('onClose', async () => {
+    scheduler.stopAll();
+    closeDb();
+  });
+
+  return app;
 }
 
-app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
-
-try {
-  getDb();
-  await app.listen({ port: config.PORT, host: config.HOST });
-} catch (err) {
-  app.log.error(err);
-  process.exit(1);
+export async function startServer(options = {}) {
+  const app = await createApp(options);
+  await app.listen({
+    port: options.port || config.PORT,
+    host: options.host || config.HOST,
+  });
+  return app;
 }
 
-process.on('SIGINT', async () => {
-  scheduler.stopAll();
-  closeDb();
-  await app.close();
-  process.exit(0);
-});
+const isCli = process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url);
 
-export default app;
+if (isCli) {
+  const app = await startServer();
+  process.on('SIGINT', async () => {
+    await app.close();
+    process.exit(0);
+  });
+  process.on('SIGTERM', async () => {
+    await app.close();
+    process.exit(0);
+  });
+}

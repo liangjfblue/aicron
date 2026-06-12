@@ -97,8 +97,8 @@ export class Scheduler {
   }
 
   stopAll() {
-    for (const { timer } of this.jobs.values()) {
-      clearInterval(timer);
+    for (const entries of this.jobs.values()) {
+      for (const entry of entries) clearInterval(entry.timer);
     }
     this.jobs.clear();
   }
