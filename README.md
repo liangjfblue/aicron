@@ -128,12 +128,22 @@ npm run desktop:dist
 - 设置页在桌面版显示“桌面应用”区域，在浏览器版不显示。
 - 任务完成后桌面通知弹出，点击通知进入对应执行详情。
 
+### 桌面版数据目录
+
+桌面打包版默认把运行数据放在用户主目录下，方便备份、排查和迁移：
+
+- macOS / Linux：`~/.aicron`
+- Windows：`C:\Users\<用户名>\.aicron`
+
+其中数据库在 `.aicron/data/aicron.db`，执行结果在 `.aicron/data/runs/`。如需自定义目录，可在启动前设置 `AICRON_HOME`。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | PORT | 3000 | 后端端口 |
 | HOST | 127.0.0.1 | 监听地址 |
+| AICRON_HOME | 用户主目录下的 `.aicron`（桌面版） | 桌面版数据根目录 |
 | DATA_DIR | ./data | 数据目录 |
 | JWT_SECRET | aicron-dev-secret-change-me | JWT 密钥 |
 | ADMIN_USER | admin | 初始管理员用户名 |

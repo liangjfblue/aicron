@@ -33,6 +33,10 @@ function resolveRoot() {
   return app.getAppPath();
 }
 
+function resolveDesktopDataRoot() {
+  return process.env.AICRON_HOME || path.join(app.getPath('home'), '.aicron');
+}
+
 function waitForHealth(url, timeoutMs = 20000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
@@ -109,9 +113,11 @@ async function startServer() {
   }
 
   const root = resolveRoot();
-  const dataDir = path.join(app.getPath('userData'), 'data');
+  const dataRoot = resolveDesktopDataRoot();
+  const dataDir = path.join(dataRoot, 'data');
   process.env.PORT = String(PORT);
   process.env.HOST = HOST;
+  process.env.AICRON_HOME = dataRoot;
   process.env.DATA_DIR = dataDir;
   process.env.DB_PATH = path.join(dataDir, 'aicron.db');
   process.env.RUNS_DIR = path.join(dataDir, 'runs');
