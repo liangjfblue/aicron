@@ -1,8 +1,22 @@
 export async function settingsRoutes(app) {
+  function detectEngineForSettings(settings, engine) {
+    const key = engine === 'codex' ? 'codexPath' : 'claudePath';
+    const envKey = engine === 'codex' ? 'CODEX_CLI_PATH' : 'CLAUDE_CLI_PATH';
+    const configuredPath = settings[key] || process.env[envKey];
+    const source = settings[key] ? 'configured' : process.env[envKey] ? 'environment' : null;
+    return { key, configuredPath, source };
+  }
+
   app.get('/api/settings', { preHandler: [app.authenticate] }, async () => {
+    const { detectCliCommand } = await import('../utils/cli-path.js');
     const rows = app.db.prepare('SELECT * FROM settings').all();
     const settings = {};
     for (const r of rows) settings[r.key] = r.value;
+    for (const engine of ['claude', 'codex']) {
+      const { key, configuredPath, source } = detectEngineForSettings(settings, engine);
+      const detected = detectCliCommand(engine, configuredPath, process.env, source);
+      if (!settings[key] && detected.displayPath) settings[key] = detected.displayPath;
+    }
     return settings;
   });
 
@@ -10,11 +24,11 @@ export async function settingsRoutes(app) {
     const { detectCliCommand } = await import('../utils/cli-path.js');
     const rows = app.db.prepare("SELECT key, value FROM settings WHERE key IN ('claudePath', 'codexPath')").all();
     const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-    const claudePath = settings.claudePath || process.env.CLAUDE_CLI_PATH;
-    const codexPath = settings.codexPath || process.env.CODEX_CLI_PATH;
+    const claude = detectEngineForSettings(settings, 'claude');
+    const codex = detectEngineForSettings(settings, 'codex');
     return {
-      claude: detectCliCommand('claude', claudePath, process.env, settings.claudePath ? 'configured' : process.env.CLAUDE_CLI_PATH ? 'environment' : null),
-      codex: detectCliCommand('codex', codexPath, process.env, settings.codexPath ? 'configured' : process.env.CODEX_CLI_PATH ? 'environment' : null),
+      claude: detectCliCommand('claude', claude.configuredPath, process.env, claude.source),
+      codex: detectCliCommand('codex', codex.configuredPath, process.env, codex.source),
     };
   });
 

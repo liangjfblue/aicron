@@ -98,6 +98,20 @@ describe('Settings Routes', () => {
     });
   });
 
+  it('fills missing CLI paths in settings response for display', async () => {
+    process.env.CLAUDE_CLI_PATH = '/desktop/env/claude';
+    const token = await login();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/settings',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().claudePath).toBe('/desktop/env/claude');
+  });
+
   it('exposes only desktop startup display settings without auth', async () => {
     getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('startMinimizedToTray', 'true')").run();
     getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('feishuAppSecret', 'secret-value')").run();
