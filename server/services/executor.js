@@ -6,6 +6,7 @@ import { resolveVariables } from './variable.js';
 import { writeResult } from '../utils/result-store.js';
 import { sha256 } from '../utils/hash.js';
 import { config } from '../config.js';
+import { buildCliSpawnEnv, resolveCommandPath } from '../utils/cli-path.js';
 
 const LAST_RESULT_LIMIT = 5000;
 
@@ -66,7 +67,11 @@ export class Executor {
         severity: 'info',
         command: engineCli,
       });
-      const child = spawn(engineCli, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const cliEnv = buildCliSpawnEnv();
+      const child = spawn(resolveCommandPath(engineCli, cliEnv.PATH), args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: cliEnv,
+      });
       this.activeProcesses.set(runId, { process: child });
 
       let stdout = '';
@@ -200,6 +205,10 @@ export class Executor {
     if (settingsPath) return settingsPath;
 
     return engine === 'codex' ? config.DEFAULT_CODEX_CLI : config.DEFAULT_CLAUDE_CLI;
+  }
+
+  _resolveCommandPath(command, pathEnv) {
+    return resolveCommandPath(command, pathEnv);
   }
 
   _getCliArgs(engine, prompt) {

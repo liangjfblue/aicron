@@ -14,9 +14,14 @@ export async function promptRoutes(app) {
     const { prompt } = request.body;
     if (!prompt) return { error: '缺少 prompt' };
     const { spawn } = await import('node:child_process');
+    const { buildCliSpawnEnv, resolveCommandPath } = await import('../utils/cli-path.js');
     return new Promise((resolve) => {
       const optimizeInstruction = `请优化以下 prompt，使其更清晰、更有效地完成目标。只返回优化后的 prompt，不要任何解释：\n\n${prompt}`;
-      const child = spawn('claude', ['--prompt', optimizeInstruction], { timeout: 30000 });
+      const cliEnv = buildCliSpawnEnv();
+      const child = spawn(resolveCommandPath('claude', cliEnv.PATH), ['--prompt', optimizeInstruction], {
+        timeout: 30000,
+        env: cliEnv,
+      });
       let out = '';
       child.stdout.on('data', (d) => { out += d.toString(); });
       child.on('close', () => resolve({ optimized: out.trim() || prompt }));

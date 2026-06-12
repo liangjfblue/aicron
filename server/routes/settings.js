@@ -20,8 +20,13 @@ export async function settingsRoutes(app) {
     const { path: cliPath } = request.body;
     if (!cliPath) return { success: false, output: '请提供 CLI 路径' };
     const { spawn } = await import('node:child_process');
+    const { buildCliSpawnEnv, resolveCommandPath } = await import('../utils/cli-path.js');
     return new Promise((resolve) => {
-      const child = spawn(cliPath, ['--version'], { timeout: 5000 });
+      const cliEnv = buildCliSpawnEnv();
+      const child = spawn(resolveCommandPath(cliPath, cliEnv.PATH), ['--version'], {
+        timeout: 5000,
+        env: cliEnv,
+      });
       let out = '';
       child.stdout.on('data', (d) => { out += d.toString(); });
       child.stderr.on('data', (d) => { out += d.toString(); });

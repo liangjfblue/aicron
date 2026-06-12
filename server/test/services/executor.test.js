@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { getDb, closeDb } from '../../db/index.js';
 import { Executor } from '../../services/executor.js';
 import { TaskService } from '../../services/task.js';
+import { buildCliPathEnv } from '../../utils/cli-path.js';
 import { writeResult } from '../../utils/result-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -115,6 +118,21 @@ describe('Executor', () => {
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('claudePath', ?)").run('/tmp/mock-claude');
 
     expect(executor._getCliPath('claude')).toBe('/tmp/mock-claude');
+  });
+
+  it('should build a PATH that discovers CLI tools from extra desktop directories', () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'aicron-cli-bin-'));
+    writeFileSync(join(binDir, 'claude'), '#!/bin/sh\necho mock claude\n');
+    chmodSync(join(binDir, 'claude'), 0o755);
+
+    try {
+      const nextPath = buildCliPathEnv({ PATH: '/usr/bin' }, [binDir]);
+
+      expect(nextPath.split(':')[0]).toBe(binDir);
+      expect(executor._resolveCommandPath('claude', nextPath)).toBe(join(binDir, 'claude'));
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+    }
   });
 
   it('should build non-interactive CLI args for each engine', () => {

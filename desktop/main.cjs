@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, ipcMain, shell, dialog } = require('electron');
 const { spawn } = require('node:child_process');
+const { existsSync, readdirSync } = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -35,6 +37,66 @@ function resolveRoot() {
 
 function resolveDesktopDataRoot() {
   return process.env.AICRON_HOME || path.join(app.getPath('home'), '.aicron');
+}
+
+function buildDesktopPathEnv() {
+  const current = process.env.PATH || process.env.Path || process.env.path || '';
+  const readDirs = (targetPath) => {
+    try {
+      return readdirSync(targetPath, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+    } catch {
+      return [];
+    }
+  };
+  const home = os.homedir();
+  const nvmRoot = path.join(home, '.nvm', 'versions', 'node');
+  const fnmRoot = path.join(home, '.local', 'share', 'fnm', 'node-versions');
+  const newestFirst = (a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
+  const extraDirs = [
+    ...readDirs(nvmRoot).sort(newestFirst).map((version) => path.join(nvmRoot, version, 'bin')),
+    ...readDirs(fnmRoot).sort(newestFirst).map((version) => path.join(fnmRoot, version, 'installation', 'bin')),
+    path.join(home, '.volta', 'bin'),
+    path.join(home, '.bun', 'bin'),
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.npm-global', 'bin'),
+    path.join(home, 'bin'),
+    path.join(home, 'AppData', 'Roaming', 'npm'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ];
+  const seen = new Set();
+  return [...extraDirs, ...current.split(path.delimiter)]
+    .filter((segment) => {
+      if (!segment || seen.has(segment)) return false;
+      seen.add(segment);
+      return true;
+    })
+    .join(path.delimiter);
+}
+
+function loadDesktopEnvironment() {
+  const nextPath = buildDesktopPathEnv();
+  process.env.PATH = nextPath;
+  if (process.platform === 'win32') process.env.Path = nextPath;
+
+  const claudeCandidates = [
+    process.env.CLAUDE_CLI_PATH,
+    ...nextPath.split(path.delimiter).map((dir) => path.join(dir, process.platform === 'win32' ? 'claude.cmd' : 'claude')),
+  ].filter(Boolean);
+  const codexCandidates = [
+    process.env.CODEX_CLI_PATH,
+    ...nextPath.split(path.delimiter).map((dir) => path.join(dir, process.platform === 'win32' ? 'codex.cmd' : 'codex')),
+  ].filter(Boolean);
+  const claudePath = claudeCandidates.find((candidate) => existsSync(candidate));
+  const codexPath = codexCandidates.find((candidate) => existsSync(candidate));
+  if (claudePath) process.env.CLAUDE_CLI_PATH = claudePath;
+  if (codexPath) process.env.CODEX_CLI_PATH = codexPath;
 }
 
 function waitForHealth(url, timeoutMs = 20000) {
@@ -83,6 +145,8 @@ function notifyRunComplete(task, run) {
 // mode starts the same server module in-process so desktop run notifications can
 // hook into completion events without duplicating backend logic.
 async function startServer() {
+  loadDesktopEnvironment();
+
   if (isDev) {
     if (process.env.AICRON_EXTERNAL_SERVER === '1') {
       await waitForHealth(API_BASE_URL);

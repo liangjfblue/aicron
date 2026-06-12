@@ -137,6 +137,8 @@ npm run desktop:dist
 
 其中数据库在 `.aicron/data/aicron.db`，执行结果在 `.aicron/data/runs/`。如需自定义目录，可在启动前设置 `AICRON_HOME`。
 
+桌面版会自动补齐常见 CLI 搜索路径，包括 Homebrew、nvm、fnm、Volta、Bun、用户本地 bin 和 Windows npm 全局目录。通常只要终端里安装过 `claude` / `codex`，桌面版就能找到；如果安装在特殊位置，可在设置页填写绝对路径，或通过 `CLAUDE_CLI_PATH` / `CODEX_CLI_PATH` 指定。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |

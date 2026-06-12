@@ -17,6 +17,7 @@ export async function skillRoutes(app) {
     const taskList = tasks.map(t => `- ${t.name} (id: ${t.id}, enabled: ${!!t.enabled}, engine: ${t.engine})`).join('\n');
 
     const { spawn } = await import('node:child_process');
+    const { buildCliSpawnEnv, resolveCommandPath } = await import('../utils/cli-path.js');
     const intentResult = await new Promise((resolve) => {
       const systemPrompt = `你是一个任务管理助手。根据用户指令返回 JSON 操作。
 
@@ -27,7 +28,11 @@ ${taskList}
 
 返回 JSON 格式：{"action":"toggle|run|status|list","taskId":"id或null","params":{}}
 只返回 JSON，不要其他内容。`;
-      const child = spawn('claude', ['--prompt', systemPrompt], { timeout: 30000 });
+      const cliEnv = buildCliSpawnEnv();
+      const child = spawn(resolveCommandPath('claude', cliEnv.PATH), ['--prompt', systemPrompt], {
+        timeout: 30000,
+        env: cliEnv,
+      });
       let out = '';
       child.stdout.on('data', (d) => { out += d.toString(); });
       child.on('close', () => resolve(out.trim()));
