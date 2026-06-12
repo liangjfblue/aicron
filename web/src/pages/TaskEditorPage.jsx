@@ -425,7 +425,7 @@ export default function TaskEditorPage() {
       const result = await testRun(toApiTask(task));
       setTestResult(result);
       if (result.status === 'succeeded') {
-        showToast('测试执行完成');
+        showToast('测试执行完成，不发送飞书通知');
       } else if (result.status === 'timeout') {
         showToast('测试执行超时', 'error');
       } else {
@@ -1079,6 +1079,9 @@ export default function TaskEditorPage() {
             <div className="card" style={{ marginTop: '12px' }}>
               <h4 style={{ marginBottom: '8px', fontSize: '0.9rem' }}>
                 测试执行结果
+                <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: 'var(--ink-tertiary)', fontWeight: 400 }}>
+                  预览执行，不触发飞书通知
+                </span>
               </h4>
               <pre style={styles.resultPre}>
                 {typeof testResult === 'string'
