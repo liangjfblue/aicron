@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   getSettings,
+  detectEngines,
   updateSettings,
   testEngine,
   testFeishu,
@@ -11,6 +12,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [engineDetection, setEngineDetection] = useState(null);
+  const [detectingEngines, setDetectingEngines] = useState(false);
   const [desktop, setDesktop] = useState({
     available: Boolean(window.aicronDesktop?.isDesktop),
     startupEnabled: false,
@@ -24,7 +27,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getSettings()
-      .then((data) => setSettings(data || {}))
+      .then(async (data) => {
+        const nextSettings = data || {};
+        setSettings(nextSettings);
+        await handleDetectEngines(nextSettings, { silent: true });
+      })
       .catch((err) => showToast(err.message, 'error'))
       .finally(() => setLoading(false));
   }, []);
@@ -38,6 +45,32 @@ export default function SettingsPage() {
 
   const update = (field, value) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const applyDetectedEnginePaths = (currentSettings, detection) => {
+    const patch = {};
+    if (!currentSettings.claudePath && detection?.claude?.displayPath) patch.claudePath = detection.claude.displayPath;
+    if (!currentSettings.codexPath && detection?.codex?.displayPath) patch.codexPath = detection.codex.displayPath;
+    if (Object.keys(patch).length > 0) {
+      setSettings((prev) => ({ ...prev, ...patch }));
+    }
+  };
+
+  const handleDetectEngines = async (currentSettings = settings || {}, options = {}) => {
+    setDetectingEngines(true);
+    try {
+      const detection = await detectEngines();
+      setEngineDetection(detection);
+      applyDetectedEnginePaths(currentSettings, detection);
+      if (!options.silent) {
+        const found = [detection?.claude?.found, detection?.codex?.found].filter(Boolean).length;
+        showToast(found ? `已检测到 ${found} 个执行引擎路径` : '未检测到执行引擎，请手动填写', found ? 'success' : 'error');
+      }
+    } catch (err) {
+      if (!options.silent) showToast(err.message || '检测失败', 'error');
+    } finally {
+      setDetectingEngines(false);
+    }
   };
 
   const handleSave = async () => {
@@ -56,7 +89,8 @@ export default function SettingsPage() {
     try {
       const result = await testEngine(path);
       if (result.success) {
-        showToast(`✓ ${result.output}`, 'success');
+        const pathText = result.resolvedPath ? `路径：${result.resolvedPath}` : result.output;
+        showToast(`✓ ${pathText}`, 'success');
       } else {
         showToast(`✕ ${result.output || '测试失败'}`, 'error');
       }
@@ -126,15 +160,26 @@ export default function SettingsPage() {
 
       {/* 执行引擎 */}
       <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>⚡ 执行引擎</h2>
+        <div style={styles.sectionHeader}>
+          <h2 style={styles.sectionTitle}>⚡ 执行引擎</h2>
+          <button className="btn btn-secondary" style={{ fontSize: '13px' }} onClick={() => handleDetectEngines(settings)} disabled={detectingEngines}>
+            {detectingEngines ? '检测中...' : '重新检测'}
+          </button>
+        </div>
         <div style={{ ...styles.row, gridTemplateColumns: '200px 500px auto' }}>
           <label style={styles.label}>Claude CLI 路径</label>
-          <input className="form-input" value={settings.claudePath || ''} onChange={(e) => update('claudePath', e.target.value)} placeholder="/usr/local/bin/claude" style={styles.input} />
+          <div>
+            <input className="form-input" value={settings.claudePath || ''} onChange={(e) => update('claudePath', e.target.value)} placeholder="/usr/local/bin/claude" style={styles.input} />
+            <EnginePathHint detection={engineDetection?.claude} value={settings.claudePath} />
+          </div>
           <button className="btn" style={{ fontSize: '13px' }} onClick={() => handleTestEngine(settings.claudePath || 'claude')}>测试</button>
         </div>
         <div style={{ ...styles.row, gridTemplateColumns: '200px 500px auto' }}>
           <label style={styles.label}>Codex CLI 路径</label>
-          <input className="form-input" value={settings.codexPath || ''} onChange={(e) => update('codexPath', e.target.value)} placeholder="/usr/local/bin/codex" style={styles.input} />
+          <div>
+            <input className="form-input" value={settings.codexPath || ''} onChange={(e) => update('codexPath', e.target.value)} placeholder="/usr/local/bin/codex" style={styles.input} />
+            <EnginePathHint detection={engineDetection?.codex} value={settings.codexPath} />
+          </div>
           <button className="btn" style={{ fontSize: '13px' }} onClick={() => handleTestEngine(settings.codexPath || 'codex')}>测试</button>
         </div>
       </section>
@@ -236,6 +281,26 @@ export default function SettingsPage() {
   );
 }
 
+function EnginePathHint({ detection, value }) {
+  if (!detection) return null;
+  if (!detection.found && !value) {
+    return <div style={styles.hintError}>未检测到，请手动填写安装路径</div>;
+  }
+  if (detection.source === 'configured') {
+    return <div style={styles.hint}>使用已保存路径</div>;
+  }
+  if (detection.source === 'environment') {
+    return <div style={styles.hint}>系统检测：{detection.displayPath}</div>;
+  }
+  if (detection.displayPath && value === detection.displayPath) {
+    return <div style={styles.hint}>自动检测：{detection.displayPath}</div>;
+  }
+  if (detection.displayPath) {
+    return <div style={styles.hint}>检测到：{detection.displayPath}</div>;
+  }
+  return null;
+}
+
 const styles = {
   section: {
     background: 'var(--surface)',
@@ -253,6 +318,13 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
   },
+  sectionHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '16px',
+  },
   row: {
     display: 'grid',
     gridTemplateColumns: '200px 400px auto',
@@ -269,5 +341,17 @@ const styles = {
   input: {
     fontSize: '14px',
     fontFamily: 'var(--font-mono)',
+  },
+  hint: {
+    marginTop: '6px',
+    fontSize: '12px',
+    color: 'var(--ink-tertiary)',
+    fontFamily: 'var(--font-display)',
+  },
+  hintError: {
+    marginTop: '6px',
+    fontSize: '12px',
+    color: 'var(--error)',
+    fontFamily: 'var(--font-display)',
   },
 };

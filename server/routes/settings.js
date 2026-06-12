@@ -6,6 +6,18 @@ export async function settingsRoutes(app) {
     return settings;
   });
 
+  app.get('/api/settings/detect-engines', { preHandler: [app.authenticate] }, async () => {
+    const { detectCliCommand } = await import('../utils/cli-path.js');
+    const rows = app.db.prepare("SELECT key, value FROM settings WHERE key IN ('claudePath', 'codexPath')").all();
+    const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    const claudePath = settings.claudePath || process.env.CLAUDE_CLI_PATH;
+    const codexPath = settings.codexPath || process.env.CODEX_CLI_PATH;
+    return {
+      claude: detectCliCommand('claude', claudePath, process.env, settings.claudePath ? 'configured' : process.env.CLAUDE_CLI_PATH ? 'environment' : null),
+      codex: detectCliCommand('codex', codexPath, process.env, settings.codexPath ? 'configured' : process.env.CODEX_CLI_PATH ? 'environment' : null),
+    };
+  });
+
   app.put('/api/settings', { preHandler: [app.authenticate] }, async (request) => {
     const stmt = app.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     for (const [key, value] of Object.entries(request.body)) {
@@ -23,15 +35,16 @@ export async function settingsRoutes(app) {
     const { buildCliSpawnEnv, resolveCommandPath } = await import('../utils/cli-path.js');
     return new Promise((resolve) => {
       const cliEnv = buildCliSpawnEnv();
-      const child = spawn(resolveCommandPath(cliPath, cliEnv.PATH), ['--version'], {
+      const resolvedPath = resolveCommandPath(cliPath, cliEnv.PATH);
+      const child = spawn(resolvedPath, ['--version'], {
         timeout: 5000,
         env: cliEnv,
       });
       let out = '';
       child.stdout.on('data', (d) => { out += d.toString(); });
       child.stderr.on('data', (d) => { out += d.toString(); });
-      child.on('close', (code) => resolve({ success: code === 0, output: out.trim() }));
-      child.on('error', (err) => resolve({ success: false, output: err.message }));
+      child.on('close', (code) => resolve({ success: code === 0, output: out.trim(), resolvedPath }));
+      child.on('error', (err) => resolve({ success: false, output: err.message, resolvedPath }));
     });
   });
 

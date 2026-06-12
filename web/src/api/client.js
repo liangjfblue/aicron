@@ -213,6 +213,10 @@ export async function getSettings() {
   return request('/api/settings');
 }
 
+export async function detectEngines() {
+  return request('/api/settings/detect-engines');
+}
+
 export async function updateSettings(settings) {
   return request('/api/settings', {
     method: 'PUT',

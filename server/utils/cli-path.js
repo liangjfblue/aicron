@@ -81,3 +81,24 @@ export function resolveCommandPath(command, pathEnv = buildCliPathEnv()) {
   }
   return command;
 }
+
+export function detectCliCommand(command, configuredPath = '', env = process.env, sourceHint = null) {
+  const trimmedConfiguredPath = String(configuredPath || '').trim();
+  const pathEnv = buildCliPathEnv(env);
+  const resolvedPath = resolveCommandPath(trimmedConfiguredPath || command, pathEnv);
+  const found = Boolean(resolvedPath && resolvedPath !== command && resolvedPath !== trimmedConfiguredPath)
+    || Boolean(trimmedConfiguredPath && existsSync(trimmedConfiguredPath));
+  const displayPath = trimmedConfiguredPath || (found ? resolvedPath : '');
+  let source = 'missing';
+  if (sourceHint) source = sourceHint;
+  else if (trimmedConfiguredPath) source = 'configured';
+  else if (found) source = 'auto';
+  return {
+    command,
+    configuredPath: trimmedConfiguredPath,
+    resolvedPath,
+    displayPath,
+    found,
+    source,
+  };
+}
