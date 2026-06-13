@@ -333,6 +333,7 @@ function createMenu() {
     {
       label: '帮助',
       submenu: [
+        { label: '检查更新', click: () => navigateTo('/settings') },
         { label: '打开项目主页', click: () => shell.openExternal('https://github.com/liangjfblue/aicron') },
       ],
     },
@@ -351,10 +352,16 @@ async function quitApp() {
 }
 
 ipcMain.handle('desktop:get-api-base-url', () => API_BASE_URL);
+ipcMain.handle('desktop:get-app-version', () => app.getVersion());
 ipcMain.handle('desktop:get-startup-enabled', () => app.getLoginItemSettings().openAtLogin);
 ipcMain.handle('desktop:set-startup-enabled', (_event, enabled) => {
   setOpenAtLogin(enabled);
   return app.getLoginItemSettings().openAtLogin;
+});
+ipcMain.handle('desktop:open-external', (_event, url) => {
+  if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return false;
+  shell.openExternal(url);
+  return true;
 });
 ipcMain.handle('desktop:show-app', () => {
   showMainWindow();

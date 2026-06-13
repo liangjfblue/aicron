@@ -6,6 +6,11 @@ import {
   testEngine,
   testFeishu,
 } from '../api/client';
+import { isNewerVersion } from '../utils/version';
+
+const FALLBACK_APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0';
+const RELEASE_API_URL = 'https://api.github.com/repos/liangjfblue/aicron/releases/latest';
+const RELEASES_PAGE_URL = 'https://github.com/liangjfblue/aicron/releases';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -14,6 +19,9 @@ export default function SettingsPage() {
   const [toast, setToast] = useState(null);
   const [engineDetection, setEngineDetection] = useState(null);
   const [detectingEngines, setDetectingEngines] = useState(false);
+  const [appVersion, setAppVersion] = useState(FALLBACK_APP_VERSION);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
   const [desktop, setDesktop] = useState({
     available: Boolean(window.aicronDesktop?.isDesktop),
     startupEnabled: false,
@@ -41,6 +49,15 @@ export default function SettingsPage() {
     window.aicronDesktop.getStartupEnabled()
       .then((enabled) => setDesktop({ available: true, startupEnabled: Boolean(enabled), loading: false }))
       .catch(() => setDesktop({ available: true, startupEnabled: false, loading: false }));
+  }, []);
+
+  useEffect(() => {
+    if (!window.aicronDesktop?.getAppVersion) return;
+    window.aicronDesktop.getAppVersion()
+      .then((version) => {
+        if (version) setAppVersion(version);
+      })
+      .catch(() => {});
   }, []);
 
   const update = (field, value) => {
@@ -155,6 +172,45 @@ export default function SettingsPage() {
       update('startMinimizedToTray', current);
       showToast(err.message || '启动后最小化设置失败', 'error');
     }
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateInfo(null);
+    try {
+      const res = await fetch(RELEASE_API_URL, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (!res.ok) throw new Error(`检查失败 (${res.status})`);
+      const release = await res.json();
+      const latestVersion = release.tag_name || release.name;
+      if (!latestVersion) throw new Error('未读取到最新版本号');
+      const hasUpdate = isNewerVersion(latestVersion, appVersion);
+      const downloadUrl = release.html_url || RELEASES_PAGE_URL;
+      setUpdateInfo({
+        hasUpdate,
+        latestVersion,
+        downloadUrl,
+        publishedAt: release.published_at,
+      });
+      showToast(hasUpdate ? `发现新版本 ${latestVersion}` : '当前已是最新版本');
+    } catch (err) {
+      setUpdateInfo({
+        error: err.message || '检查更新失败',
+        downloadUrl: RELEASES_PAGE_URL,
+      });
+      showToast(err.message || '检查更新失败', 'error');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleOpenUpdatePage = (url = RELEASES_PAGE_URL) => {
+    if (window.aicronDesktop?.openExternal) {
+      window.aicronDesktop.openExternal(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-tertiary)' }}>加载中...</div>;
@@ -302,6 +358,40 @@ export default function SettingsPage() {
         </section>
       )}
 
+      {/* 应用更新 */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>应用更新</h2>
+        <div style={styles.row}>
+          <label style={styles.label}>当前版本</label>
+          <span style={{ fontSize: '15px', fontFamily: 'var(--font-mono)' }}>v{appVersion}</span>
+          <button className="btn btn-secondary" style={{ fontSize: '13px' }} onClick={handleCheckUpdate} disabled={checkingUpdate}>
+            {checkingUpdate ? '检查中...' : '检查更新'}
+          </button>
+        </div>
+        {updateInfo && (
+          <div style={styles.row}>
+            <label style={styles.label}>检查结果</label>
+            <div style={styles.updateResult}>
+              {updateInfo.error ? (
+                <span style={styles.hintError}>{updateInfo.error}</span>
+              ) : updateInfo.hasUpdate ? (
+                <span style={styles.hint}>发现新版本 {updateInfo.latestVersion}</span>
+              ) : (
+                <span style={styles.hint}>当前已是最新版本</span>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: '13px' }}
+                onClick={() => handleOpenUpdatePage(updateInfo.downloadUrl || RELEASES_PAGE_URL)}
+              >
+                打开下载页
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* 账号安全 */}
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>🔐 账号安全</h2>
@@ -386,5 +476,10 @@ const styles = {
     fontSize: '12px',
     color: 'var(--error)',
     fontFamily: 'var(--font-display)',
+  },
+  updateResult: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
   },
 };
