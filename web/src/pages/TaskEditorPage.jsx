@@ -450,9 +450,9 @@ export default function TaskEditorPage() {
         await updateTask(id, payload);
         showToast('任务已更新');
       } else {
-        const created = await createTask(payload);
+        await createTask(payload);
         showToast('任务已创建');
-        navigate(`/tasks/${created.id}/edit`, { replace: true });
+        navigate('/', { replace: true });
       }
     } catch (err) {
       showToast(err.message, 'error');
