@@ -140,7 +140,7 @@ export default function TaskCard({ task, onRun, onToggle, onDelete }) {
           <span style={styles.scheduleChip}>
             <span className="text-mono">{scheduleDisplay}</span>
           </span>
-          {scheduleSegmentCount > 0 && (
+          {Boolean(scheduleSegmentCount > 0) && (
             <span className="badge badge-neutral">多段调度 x {scheduleSegmentCount}</span>
           )}
           {lastRunTime && (
@@ -182,7 +182,7 @@ export default function TaskCard({ task, onRun, onToggle, onDelete }) {
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          {task.enabled && (
+          {Boolean(task.enabled) && (
             <button
               className="btn btn-primary btn-sm"
               onClick={stopAndRun(onRun)}
