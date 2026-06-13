@@ -65,6 +65,23 @@ async function request(path, options = {}) {
 }
 
 /* ---------- Auth ---------- */
+export async function getBootstrapStatus() {
+  return request('/api/bootstrap/status');
+}
+
+export async function detectBootstrapEngines() {
+  return request('/api/bootstrap/detect-engines');
+}
+
+export async function completeBootstrap(payload) {
+  const data = await request('/api/bootstrap/complete', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (data.token) setToken(data.token);
+  return data;
+}
+
 export async function login(username, password) {
   const data = await request('/api/auth/login', {
     method: 'POST',

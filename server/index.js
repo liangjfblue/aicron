@@ -10,11 +10,11 @@ import { settingsRoutes } from './routes/settings.js';
 import { promptRoutes } from './routes/prompt.js';
 import { skillRoutes } from './routes/skill.js';
 import { healthRoutes } from './routes/health.js';
+import { bootstrapRoutes } from './routes/bootstrap.js';
 import { Scheduler, scheduleTask } from './services/scheduler.js';
 import { Executor } from './services/executor.js';
 import { TaskService } from './services/task.js';
 import { NotifyService } from './services/notify.js';
-import { AuthService } from './services/auth.js';
 import { triggerChildTasksAfterRun } from './services/task-chain.js';
 
 async function authenticate(request, reply) {
@@ -35,6 +35,7 @@ export async function createApp(options = {}) {
 
   app.decorate('db', db);
   app.decorate('authenticate', authenticate);
+  app.register(bootstrapRoutes);
   app.register(authRoutes);
   app.register(taskRoutes);
   app.register(runRoutes);
@@ -136,19 +137,6 @@ export async function createApp(options = {}) {
 
   app.decorate('executor', executor);
   app.decorate('scheduler', scheduler);
-
-  const authSvc = new AuthService(db);
-  const existingUser = db.prepare('SELECT id FROM users LIMIT 1').get();
-  if (!existingUser) {
-    const defaultUser = process.env.ADMIN_USER || 'admin';
-    const defaultPass = process.env.ADMIN_PASS || 'admin123';
-    try {
-      await authSvc.createUser(defaultUser, defaultPass);
-      app.log.info(`默认用户已创建: ${defaultUser} / ${defaultPass}`);
-    } catch (err) {
-      app.log.warn(`创建默认用户失败: ${err.message}`);
-    }
-  }
 
   app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
 
