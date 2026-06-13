@@ -26,4 +26,6 @@ if (copy.status !== 0) process.exit(copy.status || 1);
 
 spawnSync('xattr', ['-dr', 'com.apple.quarantine', target], { stdio: 'ignore' });
 
+rmSync(source, { recursive: true, force: true });
+
 console.log(`Installed AICron to ${target}`);
