@@ -27,7 +27,7 @@ const EMPTY_TASK = {
   timeout: 300,
   prompt: '',
   chainParentId: '',
-  chainTriggerMode: 'both',
+  chainTriggerMode: 'cron_only',
   autoIncludeLastResult: false,
   tags: [],
   feishuNotify: true,
@@ -49,9 +49,9 @@ const CONFIDENCE_LEVEL_LABELS = {
   low: '低',
 };
 const CHAIN_TRIGGER_MODES = [
-  { value: 'both', label: '定时 + 父任务' },
-  { value: 'chain_only', label: '父任务成功后' },
   { value: 'cron_only', label: '仅按定时' },
+  { value: 'chain_only', label: '仅依赖父任务' },
+  { value: 'both', label: '定时 + 父任务' },
 ];
 
 function parseJsonArray(value) {
@@ -204,7 +204,7 @@ export default function TaskEditorPage() {
     [taskOptions, id]
   );
   const selectedParentTask = availableParentTasks.find((item) => item.id === task.chainParentId);
-  const isChainEnabled = Boolean(task.chainParentId);
+  const requiresParentTask = task.chainTriggerMode === 'chain_only' || task.chainTriggerMode === 'both';
   const scheduleSegmentCount = (task.scheduleSegments || []).length;
   const selectedScheduleSegmentIndex =
     scheduleSegmentCount > 0
@@ -246,6 +246,15 @@ export default function TaskEditorPage() {
 
   const update = (field, value) => {
     setTask((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const copyChainVariable = async (value) => {
+    try {
+      await navigator.clipboard?.writeText(value);
+      showToast('变量已复制');
+    } catch {
+      showToast(value);
+    }
   };
 
   const updateScheduleSegment = (index, field, value) => {
@@ -422,6 +431,10 @@ export default function TaskEditorPage() {
     }
     if (!task.prompt.trim()) {
       showToast('请输入 Agent 任务模板', 'error');
+      return;
+    }
+    if (requiresParentTask && !task.chainParentId) {
+      showToast('请选择父任务', 'error');
       return;
     }
     setSaving(true);
@@ -1037,36 +1050,29 @@ export default function TaskEditorPage() {
               </div>
               <div style={styles.chainBox}>
                 <div style={styles.segmentedControl}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${!isChainEnabled ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => {
-                      setTask((prev) => ({
-                        ...prev,
-                        chainParentId: '',
-                        chainTriggerMode: 'both',
-                      }));
-                    }}
-                  >
-                    不关联父任务
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${isChainEnabled ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => {
-                      setTask((prev) => ({
-                        ...prev,
-                        chainParentId: prev.chainParentId || availableParentTasks[0]?.id || '',
-                        chainTriggerMode: prev.chainTriggerMode || 'both',
-                      }));
-                    }}
-                    disabled={availableParentTasks.length === 0}
-                  >
-                    关联父任务
-                  </button>
+                  {CHAIN_TRIGGER_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      className={`btn btn-sm ${task.chainTriggerMode === mode.value ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => {
+                        setTask((prev) => ({
+                          ...prev,
+                          chainTriggerMode: mode.value,
+                          chainParentId:
+                            mode.value === 'cron_only'
+                              ? ''
+                              : prev.chainParentId || '',
+                        }));
+                      }}
+                      disabled={mode.value !== 'cron_only' && availableParentTasks.length === 0}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
                 </div>
 
-                {isChainEnabled ? (
+                {requiresParentTask ? (
                   <>
                     <select
                       className="form-select"
@@ -1080,32 +1086,19 @@ export default function TaskEditorPage() {
                         }));
                       }}
                     >
+                      <option value="">请选择父任务</option>
                       {availableParentTasks.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name || item.id}
                         </option>
                       ))}
                     </select>
-                    <div style={styles.segmentedControl}>
-                      {CHAIN_TRIGGER_MODES.map((mode) => (
-                        <button
-                          key={mode.value}
-                          type="button"
-                          className={`btn btn-sm ${task.chainTriggerMode === mode.value ? 'btn-primary' : 'btn-secondary'}`}
-                          onClick={() => update('chainTriggerMode', mode.value)}
-                        >
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
                   </>
                 ) : null}
 
-                {isChainEnabled ? (
+                {requiresParentTask && task.chainParentId ? (
                   <div style={styles.chainHint}>
-                    {task.chainTriggerMode === 'cron_only'
-                      ? `已关联父任务“${selectedParentTask?.name || task.chainParentId}”，但当前只按本任务自己的定时执行。`
-                      : `父任务“${selectedParentTask?.name || task.chainParentId}”成功后会触发本任务。`}
+                    父任务“{selectedParentTask?.name || task.chainParentId}”成功后将触发本任务。
                   </div>
                 ) : null}
 
@@ -1115,9 +1108,23 @@ export default function TaskEditorPage() {
                       ? '任务链用于把一个任务的成功结果传给下一个任务。选择关联后，可以设置只由父任务触发，或同时保留本任务自己的定时。'
                       : '还没有可关联的父任务；先创建一个任务后，就可以在这里选择。'}
                     子任务模板可用
-                    <code style={styles.inlineCode}>{'{{parent_summary}}'}</code>
+                    <button
+                      type="button"
+                      style={styles.variableTag}
+                      onClick={() => copyChainVariable('{{parent_summary}}')}
+                      title="复制 {{parent_summary}}"
+                    >
+                      {'{{parent_summary}}'}
+                    </button>
                     和
-                    <code style={styles.inlineCode}>{'{{parent_result}}'}</code>
+                    <button
+                      type="button"
+                      style={styles.variableTag}
+                      onClick={() => copyChainVariable('{{parent_result}}')}
+                      title="复制 {{parent_result}}"
+                    >
+                      {'{{parent_result}}'}
+                    </button>
                     引用父任务输出。
                   </div>
                 ) : null}
@@ -1660,14 +1667,17 @@ const styles = {
     fontSize: '0.82rem',
     lineHeight: 1.6,
   },
-  inlineCode: {
+  variableTag: {
     margin: '0 4px',
-    padding: '1px 5px',
-    borderRadius: '5px',
+    padding: '2px 7px',
+    borderRadius: '999px',
     background: 'var(--bg)',
     border: '1px solid var(--border)',
+    color: 'var(--ink-secondary)',
     fontFamily: 'var(--font-mono)',
     fontSize: '0.78rem',
+    lineHeight: 1.5,
+    cursor: 'pointer',
   },
   cronInlineRow: {
     display: 'grid',
