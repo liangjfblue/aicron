@@ -225,7 +225,7 @@ export class Executor {
 
   _getCliArgs(engine, prompt) {
     return engine === 'codex'
-      ? ['exec', prompt]
+      ? ['exec', '--skip-git-repo-check', prompt]
       : ['--permission-mode', 'bypassPermissions', '-p', prompt];
   }
 

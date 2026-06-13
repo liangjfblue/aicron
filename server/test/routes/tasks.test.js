@@ -226,6 +226,32 @@ describe('Task Routes', () => {
     }
   });
 
+  it('POST /api/tasks/test-run passes skip git repo check to codex previews', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
+    const cliPath = join(binDir, 'codex');
+    writeFileSync(cliPath, '#!/bin/sh\necho \"ARGS=$@\"\n');
+    chmodSync(cliPath, 0o755);
+    getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('codexPath', ?)").run(cliPath);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/test-run',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: 'codex preview',
+        prompt_template: '你好',
+        engine: 'codex',
+      },
+    });
+
+    try {
+      expect(res.statusCode).toBe(200);
+      expect(res.json().stdout).toContain('exec --skip-git-repo-check');
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+    }
+  });
+
   it('POST /api/tasks/test-run reports skipped notification when target is missing', async () => {
     const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
     const cliPath = join(binDir, 'claude');

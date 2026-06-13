@@ -182,6 +182,6 @@ describe('Executor', () => {
       '-p',
       'hello',
     ]);
-    expect(executor._getCliArgs('codex', 'hello')).toEqual(['exec', 'hello']);
+    expect(executor._getCliArgs('codex', 'hello')).toEqual(['exec', '--skip-git-repo-check', 'hello']);
   });
 });

@@ -37,7 +37,7 @@ const taskSchema = {
 
 function getPreviewCliArgs(engine, prompt) {
   return engine === 'codex'
-    ? ['exec', prompt]
+    ? ['exec', '--skip-git-repo-check', prompt]
     : ['-p', prompt];
 }
 
