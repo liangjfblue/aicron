@@ -1681,7 +1681,7 @@ const styles = {
   },
   cronInlineRow: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 112px',
+    gridTemplateColumns: 'minmax(120px, 1fr) 128px',
     alignItems: 'stretch',
     gap: '8px',
     minWidth: 0,
@@ -1689,7 +1689,7 @@ const styles = {
   },
   cronInlineWithHelpRow: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 112px 28px',
+    gridTemplateColumns: 'minmax(128px, 0.78fr) minmax(124px, 1fr) 28px',
     alignItems: 'center',
     gap: '8px',
     minWidth: 0,
