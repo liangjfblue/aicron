@@ -124,4 +124,25 @@ describe('Settings Routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ startMinimizedToTray: 'true' });
   });
+
+  it('stores the Skill token under the key used by the Skill API', async () => {
+    const token = await login();
+    const skillToken = 'sk-aicron-test-token';
+
+    const save = await app.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { skillToken },
+    });
+    expect(save.statusCode).toBe(200);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/api/skill/status',
+      headers: { authorization: `Bearer ${skillToken}` },
+    });
+
+    expect(status.statusCode).toBe(200);
+  });
 });

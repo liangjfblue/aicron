@@ -1,4 +1,12 @@
 export async function settingsRoutes(app) {
+  const SETTING_KEY_ALIASES = {
+    skillToken: 'skill_token',
+  };
+
+  function normalizeSettingKey(key) {
+    return SETTING_KEY_ALIASES[key] || key;
+  }
+
   function detectEngineForSettings(settings, engine) {
     const key = engine === 'codex' ? 'codexPath' : 'claudePath';
     const envKey = engine === 'codex' ? 'CODEX_CLI_PATH' : 'CLAUDE_CLI_PATH';
@@ -11,7 +19,10 @@ export async function settingsRoutes(app) {
     const { detectCliCommand } = await import('../utils/cli-path.js');
     const rows = app.db.prepare('SELECT * FROM settings').all();
     const settings = {};
-    for (const r of rows) settings[r.key] = r.value;
+    for (const r of rows) {
+      settings[r.key] = r.value;
+      if (r.key === 'skill_token') settings.skillToken = r.value;
+    }
     for (const engine of ['claude', 'codex']) {
       const { key, configuredPath, source } = detectEngineForSettings(settings, engine);
       const detected = detectCliCommand(engine, configuredPath, process.env, source);
@@ -42,7 +53,7 @@ export async function settingsRoutes(app) {
     for (const [key, value] of Object.entries(request.body)) {
       // Skip non-string values (nested objects, arrays) — only save flat key-value pairs
       if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') continue;
-      stmt.run(key, String(value));
+      stmt.run(normalizeSettingKey(key), String(value));
     }
     return { success: true };
   });

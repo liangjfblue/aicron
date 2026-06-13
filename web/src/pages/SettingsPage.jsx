@@ -85,6 +85,18 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGenerateSkillToken = async () => {
+    const token = 'sk-aicron-' + Math.random().toString(36).slice(2, 18);
+    update('skillToken', token);
+    try {
+      await updateSettings({ skillToken: token });
+      navigator.clipboard.writeText(token).catch(() => {});
+      showToast('令牌已生成、保存并复制到剪贴板');
+    } catch (err) {
+      showToast(err.message || '令牌保存失败', 'error');
+    }
+  };
+
   const handleTestEngine = async (path) => {
     try {
       const result = await testEngine(path);
@@ -232,12 +244,7 @@ export default function SettingsPage() {
           <label style={styles.label}>认证令牌</label>
           <input className="form-input" type="text" value={settings.skillToken || ''} onChange={(e) => update('skillToken', e.target.value)} placeholder="sk-aicron-xxxx" style={styles.input} />
           <div style={{ display: 'flex', gap: '6px' }}>
-            <button className="btn" style={{ fontSize: '13px' }} onClick={() => {
-              const token = 'sk-aicron-' + Math.random().toString(36).slice(2, 18);
-              update('skillToken', token);
-              navigator.clipboard.writeText(token).catch(() => {});
-              showToast('令牌已生成并复制到剪贴板');
-            }}>生成并复制</button>
+            <button className="btn" style={{ fontSize: '13px' }} onClick={handleGenerateSkillToken}>生成并复制</button>
             {settings.skillToken && (
               <button className="btn" style={{ fontSize: '13px' }} onClick={() => {
                 navigator.clipboard.writeText(settings.skillToken).catch(() => {});
