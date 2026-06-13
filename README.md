@@ -130,12 +130,12 @@ npm run desktop:dist
 
 ### 桌面版数据目录
 
-桌面打包版默认把运行数据放在用户主目录下，方便备份、排查和迁移：
+桌面打包版和本地 Web 开发后端默认都把运行数据放在用户主目录下，方便备份、排查和迁移，也避免桌面软件和浏览器开发页看到两份不同数据：
 
 - macOS / Linux：`~/.aicron`
 - Windows：`C:\Users\<用户名>\.aicron`
 
-其中数据库在 `.aicron/data/aicron.db`，执行结果在 `.aicron/data/runs/`。如需自定义目录，可在启动前设置 `AICRON_HOME`。
+其中数据库在 `.aicron/data/aicron.db`，执行结果在 `.aicron/data/runs/`。如需自定义目录，可在启动前设置 `AICRON_HOME`。自动化测试默认使用项目内 `.test-aicron/data`，不会读写真实桌面数据库。
 
 桌面版会自动补齐常见 CLI 搜索路径，包括 Homebrew、nvm、fnm、Volta、Bun、用户本地 bin 和 Windows npm 全局目录。通常只要终端里安装过 `claude` / `codex`，桌面版就能找到；如果安装在特殊位置，可在设置页填写绝对路径，或通过 `CLAUDE_CLI_PATH` / `CODEX_CLI_PATH` 指定。
 
@@ -145,8 +145,8 @@ npm run desktop:dist
 |------|--------|------|
 | PORT | 3000 | 后端端口 |
 | HOST | 127.0.0.1 | 监听地址 |
-| AICRON_HOME | 用户主目录下的 `.aicron`（桌面版） | 桌面版数据根目录 |
-| DATA_DIR | ./data | 数据目录 |
+| AICRON_HOME | 用户主目录下的 `.aicron` | 应用数据根目录 |
+| DATA_DIR | `$AICRON_HOME/data` | 数据目录 |
 | JWT_SECRET | aicron-dev-secret-change-me | JWT 密钥 |
 | ADMIN_USER | admin | 初始管理员用户名 |
 | ADMIN_PASS | admin123 | 初始管理员密码 |
