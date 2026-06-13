@@ -12,6 +12,8 @@
     "desktop:build:web": "npm --prefix web run build",
     "desktop:prepare-electron": "node scripts/prepare-electron-dist.cjs",
     "desktop:pack": "npm run desktop:build:web && node scripts/run-electron-builder.cjs pack",
+    "desktop:install-local": "node scripts/install-mac-app.cjs",
+    "desktop:pack:install": "npm run desktop:pack && npm run desktop:install-local",
     "desktop:dist": "npm run desktop:build:web && node scripts/run-electron-builder.cjs dist"
   },
   "build": {
