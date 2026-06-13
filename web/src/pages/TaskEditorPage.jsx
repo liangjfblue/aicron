@@ -203,6 +203,7 @@ export default function TaskEditorPage() {
     [taskOptions, id]
   );
   const selectedParentTask = availableParentTasks.find((item) => item.id === task.chainParentId);
+  const isChainEnabled = Boolean(task.chainParentId);
   const scheduleSegmentCount = (task.scheduleSegments || []).length;
   const selectedScheduleSegmentIndex =
     scheduleSegmentCount > 0
@@ -1022,40 +1023,73 @@ export default function TaskEditorPage() {
             <div className="form-group">
               <label className="form-label">任务链</label>
               <div style={styles.chainBox}>
-                <select
-                  className="form-select"
-                  value={task.chainParentId || ''}
-                  onChange={(e) => {
-                    const parentId = e.target.value;
-                    setTask((prev) => ({
-                      ...prev,
-                      chainParentId: parentId,
-                      chainTriggerMode: parentId ? prev.chainTriggerMode || 'both' : 'both',
-                    }));
-                  }}
-                >
-                  <option value="">不关联父任务</option>
-                  {availableParentTasks.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name || item.id}
-                    </option>
-                  ))}
-                </select>
                 <div style={styles.segmentedControl}>
-                  {CHAIN_TRIGGER_MODES.map((mode) => (
-                    <button
-                      key={mode.value}
-                      type="button"
-                      className={`btn btn-sm ${task.chainTriggerMode === mode.value ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => update('chainTriggerMode', mode.value)}
-                      disabled={!task.chainParentId && mode.value === 'chain_only'}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${!isChainEnabled ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => {
+                      setTask((prev) => ({
+                        ...prev,
+                        chainParentId: '',
+                        chainTriggerMode: 'both',
+                      }));
+                    }}
+                  >
+                    不关联父任务
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${isChainEnabled ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => {
+                      setTask((prev) => ({
+                        ...prev,
+                        chainParentId: prev.chainParentId || availableParentTasks[0]?.id || '',
+                        chainTriggerMode: prev.chainTriggerMode || 'both',
+                      }));
+                    }}
+                    disabled={availableParentTasks.length === 0}
+                  >
+                    关联父任务
+                  </button>
                 </div>
+
+                {isChainEnabled ? (
+                  <>
+                    <select
+                      className="form-select"
+                      value={task.chainParentId || ''}
+                      onChange={(e) => {
+                        const parentId = e.target.value;
+                        setTask((prev) => ({
+                          ...prev,
+                          chainParentId: parentId,
+                          chainTriggerMode: parentId ? prev.chainTriggerMode || 'both' : 'both',
+                        }));
+                      }}
+                    >
+                      {availableParentTasks.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name || item.id}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.segmentedControl}>
+                      {CHAIN_TRIGGER_MODES.map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          className={`btn btn-sm ${task.chainTriggerMode === mode.value ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => update('chainTriggerMode', mode.value)}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
                 <div style={styles.chainHint}>
-                  {task.chainParentId ? (
+                  {isChainEnabled ? (
                     <>
                       {task.chainTriggerMode === 'cron_only'
                         ? `已关联父任务“${selectedParentTask?.name || task.chainParentId}”，但当前只按本任务自己的定时执行。`
@@ -1066,8 +1100,10 @@ export default function TaskEditorPage() {
                       <code style={styles.inlineCode}>{'{{parent_result}}'}</code>
                       引用父任务输出。
                     </>
-                  ) : (
+                  ) : availableParentTasks.length > 0 ? (
                     '不选择父任务时，本任务只按自己的调度或手动执行。'
+                  ) : (
+                    '还没有可关联的父任务；先创建一个任务后，就可以在这里选择。'
                   )}
                 </div>
               </div>
@@ -1133,7 +1169,6 @@ export default function TaskEditorPage() {
             </div>
           </div>
         </div>
-
         {/* Right column */}
         <div style={styles.rightCol}>
           <div
