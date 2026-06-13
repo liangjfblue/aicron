@@ -144,6 +144,19 @@ export default function SettingsPage() {
     }
   };
 
+  const handleStartMinimizedToggle = async () => {
+    const current = settings.startMinimizedToTray === 'true' ? 'true' : 'false';
+    const next = current === 'true' ? 'false' : 'true';
+    update('startMinimizedToTray', next);
+    try {
+      await updateSettings({ startMinimizedToTray: next });
+      showToast(next === 'true' ? '已开启启动后最小化' : '已关闭启动后最小化');
+    } catch (err) {
+      update('startMinimizedToTray', current);
+      showToast(err.message || '启动后最小化设置失败', 'error');
+    }
+  };
+
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-tertiary)' }}>加载中...</div>;
   if (!settings) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-tertiary)' }}>无法加载设置</div>;
 
@@ -278,7 +291,7 @@ export default function SettingsPage() {
             <button
               className={`btn ${settings.startMinimizedToTray === 'true' ? 'btn-primary' : 'btn-secondary'}`}
               style={{ fontSize: '13px', width: '120px' }}
-              onClick={() => update('startMinimizedToTray', settings.startMinimizedToTray === 'true' ? 'false' : 'true')}
+              onClick={handleStartMinimizedToggle}
             >
               {settings.startMinimizedToTray === 'true' ? '已开启' : '未开启'}
             </button>
