@@ -13,6 +13,7 @@ export default function OnboardingPage({ onComplete }) {
     feishuAppId: '',
     feishuAppSecret: '',
     defaultChatId: '',
+    startupEnabled: false,
     startMinimizedToTray: false,
   });
   const [error, setError] = useState('');
@@ -23,6 +24,10 @@ export default function OnboardingPage({ onComplete }) {
 
   useEffect(() => {
     handleDetectEngines({ silent: true });
+    if (!window.aicronDesktop?.getStartupEnabled) return;
+    window.aicronDesktop.getStartupEnabled()
+      .then((enabled) => update('startupEnabled', Boolean(enabled)))
+      .catch(() => {});
   }, []);
 
   const handleDetectEngines = async (options = {}) => {
@@ -58,6 +63,9 @@ export default function OnboardingPage({ onComplete }) {
     }
     setLoading(true);
     try {
+      if (window.aicronDesktop?.setStartupEnabled) {
+        await window.aicronDesktop.setStartupEnabled(form.startupEnabled);
+      }
       await completeBootstrap({
         username: form.username.trim(),
         password: form.password,
@@ -140,14 +148,24 @@ export default function OnboardingPage({ onComplete }) {
         {window.aicronDesktop?.isDesktop && (
           <section style={styles.section}>
             <h2 style={styles.sectionTitle}>桌面偏好</h2>
-            <label style={styles.checkbox}>
-              <input
-                type="checkbox"
-                checked={form.startMinimizedToTray}
-                onChange={(e) => update('startMinimizedToTray', e.target.checked)}
-              />
-              <span>启动后最小化到托盘</span>
-            </label>
+            <div style={styles.checkboxGroup}>
+              <label style={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={form.startupEnabled}
+                  onChange={(e) => update('startupEnabled', e.target.checked)}
+                />
+                <span>开机自启动</span>
+              </label>
+              <label style={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={form.startMinimizedToTray}
+                  onChange={(e) => update('startMinimizedToTray', e.target.checked)}
+                />
+                <span>启动后最小化到托盘</span>
+              </label>
+            </div>
           </section>
         )}
 
@@ -249,6 +267,11 @@ const styles = {
     gap: '8px',
     fontSize: '14px',
     color: 'var(--ink-secondary)',
+  },
+  checkboxGroup: {
+    display: 'flex',
+    gap: '22px',
+    flexWrap: 'wrap',
   },
   error: {
     background: 'var(--error-light)',
