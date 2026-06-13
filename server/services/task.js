@@ -11,7 +11,7 @@ export class TaskService {
     return {
       ...row,
       auto_include_last_result: row.auto_include_last_result === 1,
-      chain_trigger_mode: row.chain_trigger_mode || 'both',
+      chain_trigger_mode: row.chain_trigger_mode || 'cron_only',
       feishu_chat_ids: JSON.parse(row.feishu_chat_ids || '[]'),
       tags: JSON.parse(row.tags || '[]'),
       schedule_segments: JSON.parse(row.schedule_segments || '[]'),
@@ -39,7 +39,7 @@ export class TaskService {
       data.schedule_segments || '[]',
       data.timeout_seconds ?? null,
       data.chain_parent_id || null,
-      data.chain_trigger_mode || 'both',
+      data.chain_trigger_mode || 'cron_only',
       data.auto_include_last_result ? 1 : 0,
       data.feishu_mode || 'full',
       data.feishu_chat_ids || '[]',

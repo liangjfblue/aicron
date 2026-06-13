@@ -158,6 +158,26 @@ describe('Task Routes', () => {
     });
   });
 
+  it('POST /api/tasks defaults chain trigger mode to cron only', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: '普通定时任务',
+        prompt_template: '只按定时执行',
+        engine: 'claude',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      name: '普通定时任务',
+      chain_parent_id: null,
+      chain_trigger_mode: 'cron_only',
+    });
+  });
+
   it('POST /api/tasks/test-run accepts unsaved task data without creating a persisted run', async () => {
     const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
     const cliPath = join(binDir, 'claude');

@@ -161,7 +161,7 @@ function toApiTask(task) {
     schedule_segments: JSON.stringify(task.scheduleSegments || []),
     timeout_seconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : null,
     chain_parent_id: task.chainParentId || null,
-    chain_trigger_mode: task.chainTriggerMode || 'both',
+    chain_trigger_mode: task.chainTriggerMode || 'cron_only',
     auto_include_last_result: Boolean(task.autoIncludeLastResult),
     feishu_mode: task.feishuMode || 'full',
     feishu_chat_ids: JSON.stringify(task.feishuChatIds || []),
@@ -407,7 +407,7 @@ export default function TaskEditorPage() {
         ? normalizeScheduleSegments(importDraft.schedule_segments)
         : prev.scheduleSegments,
       timeout: importDraft.timeout_seconds ?? prev.timeout,
-      chainTriggerMode: importDraft.chain_trigger_mode || prev.chainTriggerMode,
+      chainTriggerMode: importDraft.chain_trigger_mode || prev.chainTriggerMode || 'cron_only',
       feishuMode: importDraft.feishu_mode || prev.feishuMode,
       tags: nextTags,
     }));
@@ -1082,7 +1082,7 @@ export default function TaskEditorPage() {
                         setTask((prev) => ({
                           ...prev,
                           chainParentId: parentId,
-                          chainTriggerMode: parentId ? prev.chainTriggerMode || 'both' : 'both',
+                          chainTriggerMode: parentId ? prev.chainTriggerMode || 'chain_only' : 'cron_only',
                         }));
                       }}
                     >
