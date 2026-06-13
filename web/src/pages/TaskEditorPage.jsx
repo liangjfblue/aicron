@@ -191,6 +191,7 @@ export default function TaskEditorPage() {
   const [tagText, setTagText] = useState(formatTagText(EMPTY_TASK.tags));
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cronGuideOpen, setCronGuideOpen] = useState(false);
+  const [chainHelpOpen, setChainHelpOpen] = useState(false);
   const [activeWindowMode, setActiveWindowMode] = useState('none');
   const [expandedScheduleSegment, setExpandedScheduleSegment] = useState(null);
   const [taskOptions, setTaskOptions] = useState([]);
@@ -1021,7 +1022,19 @@ export default function TaskEditorPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">任务链</label>
+              <div style={styles.chainLabelRow}>
+                <label className="form-label" style={{ marginBottom: 0 }}>任务链</label>
+                <button
+                  type="button"
+                  style={styles.chainHelpButton}
+                  onClick={() => setChainHelpOpen((open) => !open)}
+                  aria-label={chainHelpOpen ? '隐藏任务链说明' : '查看任务链说明'}
+                  aria-expanded={chainHelpOpen}
+                  title={chainHelpOpen ? '隐藏任务链说明' : '查看任务链说明'}
+                >
+                  ?
+                </button>
+              </div>
               <div style={styles.chainBox}>
                 <div style={styles.segmentedControl}>
                   <button
@@ -1088,24 +1101,26 @@ export default function TaskEditorPage() {
                   </>
                 ) : null}
 
-                <div style={styles.chainHint}>
-                  {isChainEnabled ? (
-                    <>
-                      {task.chainTriggerMode === 'cron_only'
-                        ? `已关联父任务“${selectedParentTask?.name || task.chainParentId}”，但当前只按本任务自己的定时执行。`
-                        : `父任务“${selectedParentTask?.name || task.chainParentId}”成功后会触发本任务。`}
-                      子任务模板可用
-                      <code style={styles.inlineCode}>{'{{parent_summary}}'}</code>
-                      和
-                      <code style={styles.inlineCode}>{'{{parent_result}}'}</code>
-                      引用父任务输出。
-                    </>
-                  ) : availableParentTasks.length > 0 ? (
-                    '不选择父任务时，本任务只按自己的调度或手动执行。'
-                  ) : (
-                    '还没有可关联的父任务；先创建一个任务后，就可以在这里选择。'
-                  )}
-                </div>
+                {isChainEnabled ? (
+                  <div style={styles.chainHint}>
+                    {task.chainTriggerMode === 'cron_only'
+                      ? `已关联父任务“${selectedParentTask?.name || task.chainParentId}”，但当前只按本任务自己的定时执行。`
+                      : `父任务“${selectedParentTask?.name || task.chainParentId}”成功后会触发本任务。`}
+                  </div>
+                ) : null}
+
+                {chainHelpOpen ? (
+                  <div style={styles.chainHint}>
+                    {availableParentTasks.length > 0
+                      ? '任务链用于把一个任务的成功结果传给下一个任务。选择关联后，可以设置只由父任务触发，或同时保留本任务自己的定时。'
+                      : '还没有可关联的父任务；先创建一个任务后，就可以在这里选择。'}
+                    子任务模板可用
+                    <code style={styles.inlineCode}>{'{{parent_summary}}'}</code>
+                    和
+                    <code style={styles.inlineCode}>{'{{parent_result}}'}</code>
+                    引用父任务输出。
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1606,6 +1621,25 @@ const styles = {
   twoColumnRow: {
     display: 'flex',
     gap: '18px',
+  },
+  chainLabelRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px',
+  },
+  chainHelpButton: {
+    width: '24px',
+    height: '24px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '999px',
+    border: '1px solid var(--border)',
+    background: 'var(--surface)',
+    color: 'var(--ink-secondary)',
+    fontWeight: 600,
+    lineHeight: 1,
   },
   chainBox: {
     display: 'flex',
