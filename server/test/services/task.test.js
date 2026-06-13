@@ -53,6 +53,7 @@ describe('TaskService', () => {
     expect(task.tags).toEqual(['daily']);
     expect(task.notify_on_change).toBe(1);
     expect(task.auto_include_last_result).toBe(false);
+    expect(task.auto_include_parent_result).toBe(true);
   });
 
   it('should list all tasks', () => {
@@ -83,6 +84,7 @@ describe('TaskService', () => {
       active_end_at: null,
       schedule_segments: '[]',
       auto_include_last_result: true,
+      auto_include_parent_result: false,
     });
     expect(updated.name).toBe('Updated Task');
     expect(updated.description).toBe('New desc');
@@ -91,6 +93,7 @@ describe('TaskService', () => {
     expect(updated.active_end_at).toBeNull();
     expect(updated.schedule_segments).toEqual([]);
     expect(updated.auto_include_last_result).toBe(true);
+    expect(updated.auto_include_parent_result).toBe(false);
   });
 
   it('should return task unchanged when update has no allowed fields', () => {

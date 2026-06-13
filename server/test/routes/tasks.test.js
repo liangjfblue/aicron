@@ -158,6 +158,31 @@ describe('Task Routes', () => {
     });
   });
 
+  it('POST /api/tasks stores parent result auto include setting', async () => {
+    const parentSvc = new TaskService(getDb());
+    const parent = parentSvc.create({ name: '父任务', prompt_template: '父', engine: 'claude' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: '子任务不注入父结果',
+        prompt_template: '子任务',
+        engine: 'claude',
+        chain_parent_id: parent.id,
+        chain_trigger_mode: 'chain_only',
+        auto_include_parent_result: false,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      name: '子任务不注入父结果',
+      auto_include_parent_result: false,
+    });
+  });
+
   it('POST /api/tasks defaults chain trigger mode to cron only', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -175,6 +200,7 @@ describe('Task Routes', () => {
       name: '普通定时任务',
       chain_parent_id: null,
       chain_trigger_mode: 'cron_only',
+      auto_include_parent_result: true,
     });
   });
 

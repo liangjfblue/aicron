@@ -48,7 +48,14 @@ export class Executor {
       parentSummary,
       prevOutput: parentResult,
     });
-    const finalPrompt = this._withLastRunContext(resolvedPrompt, task, lastRun, lastResult, lastSummary);
+    const promptWithParentContext = this._withParentRunContext(
+      resolvedPrompt,
+      task,
+      parentRun,
+      parentResult,
+      parentSummary,
+    );
+    const finalPrompt = this._withLastRunContext(promptWithParentContext, task, lastRun, lastResult, lastSummary);
 
     // Create run record
     this.runSvc.create({
@@ -249,6 +256,33 @@ export class Executor {
 
   _shouldIncludeLastResult(task) {
     return task.auto_include_last_result !== false && task.auto_include_last_result !== 0;
+  }
+
+  _shouldIncludeParentResult(task) {
+    return task.auto_include_parent_result !== false && task.auto_include_parent_result !== 0;
+  }
+
+  _withParentRunContext(prompt, task, parentRun, parentResult, parentSummary) {
+    if (!this._shouldIncludeParentResult(task) || !parentRun || (!parentResult && !parentSummary)) return prompt;
+    if (/\{\{parent_result\}\}|\{\{parent_summary\}\}|\{\{prev_output\}\}/.test(task.prompt_template || task.prompt || '')) {
+      return prompt;
+    }
+
+    const parts = [
+      prompt,
+      '',
+      '【AICron 自动注入：父任务执行结果】',
+      `父任务：${parentRun.task_name || task.chain_parent_id || '未知'}`,
+      `父任务执行时间：${parentRun.started_at || parentRun.finished_at || '未知'}`,
+    ];
+    if (parentSummary) parts.push(`父任务摘要：${parentSummary}`);
+    if (parentResult) {
+      const trimmed = parentResult.length > LAST_RESULT_LIMIT
+        ? `${parentResult.slice(0, LAST_RESULT_LIMIT).trimEnd()}\n...(父任务结果过长，已截断)`
+        : parentResult;
+      parts.push('父任务结果：', trimmed);
+    }
+    return parts.join('\n');
   }
 
   _withLastRunContext(prompt, task, lastRun, lastResult, lastSummary) {

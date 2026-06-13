@@ -129,6 +129,128 @@ describe('Executor', () => {
     expect(run.trigger_type).toBe('chain');
   }, 15000);
 
+  it('should auto include parent result for chained child prompts when enabled', async () => {
+    const parent = taskSvc.create({
+      name: 'parent auto context',
+      prompt_template: '父任务',
+      engine: 'claude',
+    });
+    const child = taskSvc.create({
+      name: 'child auto context',
+      prompt_template: '子任务正文',
+      engine: 'claude',
+      chain_parent_id: parent.id,
+      chain_trigger_mode: 'chain_only',
+      auto_include_parent_result: true,
+    });
+    const parentPath = writeResult(parent.id, 'parent-auto-run', '父任务完整报告');
+    executor.runSvc.create({
+      id: 'parent-auto-run',
+      task_id: parent.id,
+      status: 'succeeded',
+      engine: 'claude',
+      trigger_type: 'manual',
+      started_at: '2026-06-01T00:00:00.000Z',
+    });
+    const parentRun = executor.runSvc.update('parent-auto-run', {
+      result_path: parentPath,
+      summary: '父任务摘要',
+      finished_at: '2026-06-01T00:01:00.000Z',
+    });
+
+    const run = await executor.execute(child, {
+      engineCli: 'echo',
+      timeoutSeconds: 5,
+      triggerType: 'chain',
+      parentRun,
+    });
+
+    expect(run.resolved_prompt).toContain('子任务正文');
+    expect(run.resolved_prompt).toContain('【AICron 自动注入：父任务执行结果】');
+    expect(run.resolved_prompt).toContain('父任务：parent auto context');
+    expect(run.resolved_prompt).toContain('父任务摘要：父任务摘要');
+    expect(run.resolved_prompt).toContain('父任务完整报告');
+  }, 15000);
+
+  it('should not auto include parent result when disabled', async () => {
+    const parent = taskSvc.create({
+      name: 'parent disabled context',
+      prompt_template: '父任务',
+      engine: 'claude',
+    });
+    const child = taskSvc.create({
+      name: 'child disabled context',
+      prompt_template: '子任务正文',
+      engine: 'claude',
+      chain_parent_id: parent.id,
+      chain_trigger_mode: 'chain_only',
+      auto_include_parent_result: false,
+    });
+    const parentPath = writeResult(parent.id, 'parent-disabled-run', '不应自动注入');
+    executor.runSvc.create({
+      id: 'parent-disabled-run',
+      task_id: parent.id,
+      status: 'succeeded',
+      engine: 'claude',
+      trigger_type: 'manual',
+      started_at: '2026-06-01T00:00:00.000Z',
+    });
+    const parentRun = executor.runSvc.update('parent-disabled-run', {
+      result_path: parentPath,
+      summary: '父任务摘要',
+      finished_at: '2026-06-01T00:01:00.000Z',
+    });
+
+    const run = await executor.execute(child, {
+      engineCli: 'echo',
+      timeoutSeconds: 5,
+      triggerType: 'chain',
+      parentRun,
+    });
+
+    expect(run.resolved_prompt).toBe('子任务正文');
+  }, 15000);
+
+  it('should not duplicate parent context when prompt already uses parent variables', async () => {
+    const parent = taskSvc.create({
+      name: 'parent explicit context',
+      prompt_template: '父任务',
+      engine: 'claude',
+    });
+    const child = taskSvc.create({
+      name: 'child explicit context',
+      prompt_template: '子任务正文 {{parent_summary}}',
+      engine: 'claude',
+      chain_parent_id: parent.id,
+      chain_trigger_mode: 'chain_only',
+      auto_include_parent_result: true,
+    });
+    const parentPath = writeResult(parent.id, 'parent-explicit-run', '父任务完整报告');
+    executor.runSvc.create({
+      id: 'parent-explicit-run',
+      task_id: parent.id,
+      status: 'succeeded',
+      engine: 'claude',
+      trigger_type: 'manual',
+      started_at: '2026-06-01T00:00:00.000Z',
+    });
+    const parentRun = executor.runSvc.update('parent-explicit-run', {
+      result_path: parentPath,
+      summary: '父任务摘要',
+      finished_at: '2026-06-01T00:01:00.000Z',
+    });
+
+    const run = await executor.execute(child, {
+      engineCli: 'echo',
+      timeoutSeconds: 5,
+      triggerType: 'chain',
+      parentRun,
+    });
+
+    expect(run.resolved_prompt).toBe('子任务正文 父任务摘要');
+    expect(run.resolved_prompt).not.toContain('【AICron 自动注入：父任务执行结果】');
+  }, 15000);
+
   it('should not auto include previous result by default', async () => {
     const task = taskSvc.create({
       name: 'last result default off', prompt_template: '本次任务', engine: 'claude',

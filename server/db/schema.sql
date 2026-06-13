@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   enabled INTEGER NOT NULL DEFAULT 1,
   chain_parent_id TEXT DEFAULT NULL,
   chain_trigger_mode TEXT NOT NULL DEFAULT 'cron_only' CHECK (chain_trigger_mode IN ('cron_only','chain_only','both')),
+  auto_include_parent_result INTEGER NOT NULL DEFAULT 1,
   auto_include_last_result INTEGER NOT NULL DEFAULT 0,
   feishu_mode TEXT NOT NULL DEFAULT 'full' CHECK (feishu_mode IN ('full', 'summary')),
   feishu_chat_ids TEXT DEFAULT '[]',

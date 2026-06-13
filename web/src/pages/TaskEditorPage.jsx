@@ -28,6 +28,7 @@ const EMPTY_TASK = {
   prompt: '',
   chainParentId: '',
   chainTriggerMode: 'cron_only',
+  autoIncludeParentResult: true,
   autoIncludeLastResult: false,
   tags: [],
   feishuNotify: true,
@@ -137,6 +138,8 @@ function toFormTask(data = {}) {
     prompt: data.prompt_template ?? data.prompt ?? EMPTY_TASK.prompt,
     chainParentId: data.chain_parent_id ?? data.chainParentId ?? EMPTY_TASK.chainParentId,
     chainTriggerMode: data.chain_trigger_mode ?? data.chainTriggerMode ?? EMPTY_TASK.chainTriggerMode,
+    autoIncludeParentResult:
+      data.auto_include_parent_result ?? data.autoIncludeParentResult ?? EMPTY_TASK.autoIncludeParentResult,
     autoIncludeLastResult:
       data.auto_include_last_result ?? data.autoIncludeLastResult ?? EMPTY_TASK.autoIncludeLastResult,
     feishuMode: data.feishu_mode ?? data.feishuMode ?? EMPTY_TASK.feishuMode,
@@ -162,6 +165,7 @@ function toApiTask(task) {
     timeout_seconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : null,
     chain_parent_id: task.chainParentId || null,
     chain_trigger_mode: task.chainTriggerMode || 'cron_only',
+    auto_include_parent_result: Boolean(task.autoIncludeParentResult),
     auto_include_last_result: Boolean(task.autoIncludeLastResult),
     feishu_mode: task.feishuMode || 'full',
     feishu_chat_ids: JSON.stringify(task.feishuChatIds || []),
@@ -408,6 +412,8 @@ export default function TaskEditorPage() {
         : prev.scheduleSegments,
       timeout: importDraft.timeout_seconds ?? prev.timeout,
       chainTriggerMode: importDraft.chain_trigger_mode || prev.chainTriggerMode || 'cron_only',
+      autoIncludeParentResult:
+        importDraft.auto_include_parent_result ?? prev.autoIncludeParentResult ?? true,
       feishuMode: importDraft.feishu_mode || prev.feishuMode,
       tags: nextTags,
     }));
@@ -1093,6 +1099,14 @@ export default function TaskEditorPage() {
                         </option>
                       ))}
                     </select>
+                    <label style={styles.checkbox}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(task.autoIncludeParentResult)}
+                        onChange={(e) => update('autoIncludeParentResult', e.target.checked)}
+                      />
+                      <span>执行时自动引用父任务结果</span>
+                    </label>
                   </>
                 ) : null}
 

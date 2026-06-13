@@ -11,6 +11,7 @@ export class TaskService {
     return {
       ...row,
       auto_include_last_result: row.auto_include_last_result === 1,
+      auto_include_parent_result: row.auto_include_parent_result !== 0,
       chain_trigger_mode: row.chain_trigger_mode || 'cron_only',
       feishu_chat_ids: JSON.parse(row.feishu_chat_ids || '[]'),
       tags: JSON.parse(row.tags || '[]'),
@@ -24,9 +25,9 @@ export class TaskService {
     this.db.prepare(`
       INSERT INTO tasks (id, name, description, prompt_template, engine, cron_expression,
         active_start_at, active_end_at, schedule_segments,
-        timeout_seconds, chain_parent_id, chain_trigger_mode, auto_include_last_result, feishu_mode, feishu_chat_ids,
+        timeout_seconds, chain_parent_id, chain_trigger_mode, auto_include_parent_result, auto_include_last_result, feishu_mode, feishu_chat_ids,
         notify_on_change, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       data.name || '',
@@ -40,6 +41,7 @@ export class TaskService {
       data.timeout_seconds ?? null,
       data.chain_parent_id || null,
       data.chain_trigger_mode || 'cron_only',
+      data.auto_include_parent_result === false ? 0 : 1,
       data.auto_include_last_result ? 1 : 0,
       data.feishu_mode || 'full',
       data.feishu_chat_ids || '[]',
@@ -95,7 +97,7 @@ export class TaskService {
     const allowed = [
       'name', 'description', 'prompt_template', 'engine', 'cron_expression',
       'active_start_at', 'active_end_at', 'schedule_segments',
-      'timeout_seconds', 'chain_parent_id', 'chain_trigger_mode', 'auto_include_last_result', 'feishu_mode', 'feishu_chat_ids',
+      'timeout_seconds', 'chain_parent_id', 'chain_trigger_mode', 'auto_include_parent_result', 'auto_include_last_result', 'feishu_mode', 'feishu_chat_ids',
       'notify_on_change', 'tags',
     ];
 
@@ -105,7 +107,7 @@ export class TaskService {
     for (const key of allowed) {
       if (data[key] !== undefined) {
         sets.push(`${key} = ?`);
-        if (key === 'notify_on_change' || key === 'auto_include_last_result') {
+        if (key === 'notify_on_change' || key === 'auto_include_last_result' || key === 'auto_include_parent_result') {
           params.push(data[key] ? 1 : 0);
         } else {
           params.push(data[key]);
