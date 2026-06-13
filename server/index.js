@@ -15,6 +15,7 @@ import { Executor } from './services/executor.js';
 import { TaskService } from './services/task.js';
 import { NotifyService } from './services/notify.js';
 import { AuthService } from './services/auth.js';
+import { triggerChildTasksAfterRun } from './services/task-chain.js';
 
 async function authenticate(request, reply) {
   const auth = request.headers.authorization;
@@ -92,12 +93,37 @@ export async function createApp(options = {}) {
       });
       app.log.error({ err }, 'Notify error');
     }
+    try {
+      const childRuns = await triggerChildTasksAfterRun({
+        db,
+        executor,
+        task,
+        run,
+        logger: app.log,
+      });
+      if (childRuns.length > 0) {
+        notifySvc.runSvc.addEvent(run.id, 'chain_triggered', '已触发子任务', `已启动 ${childRuns.length} 个子任务`, {
+          stage: 'chain',
+          progress: 100,
+          severity: 'success',
+          child_run_ids: childRuns.map((childRun) => childRun.id),
+        });
+      }
+    } catch (err) {
+      notifySvc.runSvc.addEvent(run.id, 'chain_failed', '子任务触发失败', err.message, {
+        stage: 'chain',
+        progress: 100,
+        severity: 'error',
+      });
+      app.log.error({ err }, 'Chain trigger error');
+    }
   };
 
   const scheduler = new Scheduler(async (taskId) => {
     const taskSvc = new TaskService(db);
     const task = taskSvc.getById(taskId);
     if (!task || !task.enabled) return;
+    if (task.chain_trigger_mode === 'chain_only') return;
     if (!Scheduler.isTaskActiveNow(task)) return;
     await executor.execute(task, { triggerType: 'cron' });
   });

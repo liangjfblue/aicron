@@ -15,6 +15,7 @@ function runMigrations(database) {
   ensureColumn(database, 'tasks', 'active_start_at', 'TEXT DEFAULT NULL');
   ensureColumn(database, 'tasks', 'active_end_at', 'TEXT DEFAULT NULL');
   ensureColumn(database, 'tasks', 'schedule_segments', "TEXT DEFAULT '[]'");
+  ensureColumn(database, 'tasks', 'chain_trigger_mode', "TEXT NOT NULL DEFAULT 'both'");
   ensureColumn(database, 'tasks', 'auto_include_last_result', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(database, 'runs', 'failure_reason', 'TEXT DEFAULT NULL');
   ensureColumn(database, 'runs', 'failure_hint', 'TEXT DEFAULT NULL');

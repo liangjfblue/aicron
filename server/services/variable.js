@@ -18,7 +18,9 @@ export function resolveVariables(template, task, context = {}) {
     '{{week_end}}': format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
     '{{last_result}}': context.lastResult || '',
     '{{last_summary}}': context.lastSummary || '',
-    '{{prev_output}}': context.prevOutput || context.lastResult || '',
+    '{{parent_result}}': context.parentResult || '',
+    '{{parent_summary}}': context.parentSummary || '',
+    '{{prev_output}}': context.prevOutput || context.parentResult || context.lastResult || '',
     '{{run_id}}': context.runId || '',
   };
 

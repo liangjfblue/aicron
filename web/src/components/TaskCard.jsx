@@ -2,6 +2,11 @@ import { useNavigate } from 'react-router-dom';
 import { getCronPresetLabel } from '../utils/cronPresets';
 
 const ENGINE_LABELS = { claude: 'Claude', codex: 'Codex' };
+const CHAIN_MODE_LABELS = {
+  chain_only: '父任务触发',
+  both: '定时+链',
+  cron_only: '仅定时',
+};
 
 function formatNextRun(cron) {
   if (!cron) return '未设置';
@@ -95,6 +100,8 @@ export default function TaskCard({ task, onRun, onToggle, onDelete }) {
   const scheduleSegments = normalizeScheduleSegments(task.schedule_segments || task.scheduleSegments);
   const scheduleSegmentCount = scheduleSegments.length;
   const scheduleDisplay = getScheduleDisplay(task, scheduleSegments);
+  const hasParentTask = Boolean(task.chain_parent_id || task.chainParentId);
+  const chainMode = task.chain_trigger_mode || task.chainTriggerMode || 'both';
 
   return (
     <div
@@ -162,8 +169,8 @@ export default function TaskCard({ task, onRun, onToggle, onDelete }) {
           <span className="badge badge-accent">
             {ENGINE_LABELS[task.engine] || task.engine}
           </span>
-          {(task.chain_parent_id || task.chainParentId) && (
-            <span className="badge badge-warn">任务链</span>
+          {hasParentTask && (
+            <span className="badge badge-warn">{CHAIN_MODE_LABELS[chainMode] || '任务链'}</span>
           )}
           {(task.tags || []).map((tag) => (
             <span key={tag} className="badge badge-neutral">{tag}</span>

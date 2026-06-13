@@ -89,6 +89,46 @@ describe('Executor', () => {
     expect(run.resolved_prompt).toContain('上次报告结论');
   }, 15000);
 
+  it('should expose parent run result and summary to chained child prompts', async () => {
+    const parent = taskSvc.create({
+      name: 'parent task',
+      prompt_template: '父任务',
+      engine: 'claude',
+    });
+    const child = taskSvc.create({
+      name: 'child task',
+      prompt_template: '摘要={{parent_summary}}\n结果={{parent_result}}\n前序={{prev_output}}',
+      engine: 'claude',
+      chain_parent_id: parent.id,
+    });
+    const parentPath = writeResult(parent.id, 'parent-run', '父任务完整输出');
+    executor.runSvc.create({
+      id: 'parent-run',
+      task_id: parent.id,
+      status: 'succeeded',
+      engine: 'claude',
+      trigger_type: 'manual',
+      started_at: '2026-06-01T00:00:00.000Z',
+    });
+    const parentRun = executor.runSvc.update('parent-run', {
+      result_path: parentPath,
+      summary: '父任务摘要',
+      finished_at: '2026-06-01T00:01:00.000Z',
+    });
+
+    const run = await executor.execute(child, {
+      engineCli: 'echo',
+      timeoutSeconds: 5,
+      triggerType: 'chain',
+      parentRun,
+    });
+
+    expect(run.resolved_prompt).toContain('摘要=父任务摘要');
+    expect(run.resolved_prompt).toContain('结果=父任务完整输出');
+    expect(run.resolved_prompt).toContain('前序=父任务完整输出');
+    expect(run.trigger_type).toBe('chain');
+  }, 15000);
+
   it('should not auto include previous result by default', async () => {
     const task = taskSvc.create({
       name: 'last result default off', prompt_template: '本次任务', engine: 'claude',

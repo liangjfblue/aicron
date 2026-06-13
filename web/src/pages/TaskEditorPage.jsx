@@ -8,6 +8,7 @@ import {
   dryRun,
   analyzeTaskImport,
   analyzeCron,
+  getTasks,
 } from '../api/client';
 import CronPresets from '../components/CronPresets';
 import CronFieldGuide from '../components/CronFieldGuide';
@@ -26,6 +27,7 @@ const EMPTY_TASK = {
   timeout: 300,
   prompt: '',
   chainParentId: '',
+  chainTriggerMode: 'both',
   autoIncludeLastResult: false,
   tags: [],
   feishuNotify: true,
@@ -46,6 +48,11 @@ const CONFIDENCE_LEVEL_LABELS = {
   medium: '中',
   low: '低',
 };
+const CHAIN_TRIGGER_MODES = [
+  { value: 'both', label: '定时 + 父任务' },
+  { value: 'chain_only', label: '父任务成功后' },
+  { value: 'cron_only', label: '仅按定时' },
+];
 
 function parseJsonArray(value) {
   if (Array.isArray(value)) return value;
@@ -129,6 +136,7 @@ function toFormTask(data = {}) {
     timeout: data.timeout_seconds ?? data.timeout ?? TIMEOUT_UNLIMITED,
     prompt: data.prompt_template ?? data.prompt ?? EMPTY_TASK.prompt,
     chainParentId: data.chain_parent_id ?? data.chainParentId ?? EMPTY_TASK.chainParentId,
+    chainTriggerMode: data.chain_trigger_mode ?? data.chainTriggerMode ?? EMPTY_TASK.chainTriggerMode,
     autoIncludeLastResult:
       data.auto_include_last_result ?? data.autoIncludeLastResult ?? EMPTY_TASK.autoIncludeLastResult,
     feishuMode: data.feishu_mode ?? data.feishuMode ?? EMPTY_TASK.feishuMode,
@@ -153,6 +161,7 @@ function toApiTask(task) {
     schedule_segments: JSON.stringify(task.scheduleSegments || []),
     timeout_seconds: Number.isFinite(timeoutSeconds) ? timeoutSeconds : null,
     chain_parent_id: task.chainParentId || null,
+    chain_trigger_mode: task.chainTriggerMode || 'both',
     auto_include_last_result: Boolean(task.autoIncludeLastResult),
     feishu_mode: task.feishuMode || 'full',
     feishu_chat_ids: JSON.stringify(task.feishuChatIds || []),
@@ -184,10 +193,16 @@ export default function TaskEditorPage() {
   const [cronGuideOpen, setCronGuideOpen] = useState(false);
   const [activeWindowMode, setActiveWindowMode] = useState('none');
   const [expandedScheduleSegment, setExpandedScheduleSegment] = useState(null);
+  const [taskOptions, setTaskOptions] = useState([]);
   const promptPreviewTask = useMemo(
     () => ({ name: task.name, description: task.description }),
     [task.name, task.description]
   );
+  const availableParentTasks = useMemo(
+    () => taskOptions.filter((item) => item.id !== id),
+    [taskOptions, id]
+  );
+  const selectedParentTask = availableParentTasks.find((item) => item.id === task.chainParentId);
   const scheduleSegmentCount = (task.scheduleSegments || []).length;
   const selectedScheduleSegmentIndex =
     scheduleSegmentCount > 0
@@ -220,6 +235,12 @@ export default function TaskEditorPage() {
       .catch((err) => showToast(err.message, 'error'))
       .finally(() => setLoading(false));
   }, [id, isEdit]);
+
+  useEffect(() => {
+    getTasks()
+      .then((items) => setTaskOptions(Array.isArray(items) ? items : []))
+      .catch(() => setTaskOptions([]));
+  }, []);
 
   const update = (field, value) => {
     setTask((prev) => ({ ...prev, [field]: value }));
@@ -375,6 +396,7 @@ export default function TaskEditorPage() {
         ? normalizeScheduleSegments(importDraft.schedule_segments)
         : prev.scheduleSegments,
       timeout: importDraft.timeout_seconds ?? prev.timeout,
+      chainTriggerMode: importDraft.chain_trigger_mode || prev.chainTriggerMode,
       feishuMode: importDraft.feishu_mode || prev.feishuMode,
       tags: nextTags,
     }));
@@ -998,13 +1020,57 @@ export default function TaskEditorPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">任务链父任务</label>
-              <input
-                className="form-input"
-                value={task.chainParentId || ''}
-                onChange={(e) => update('chainParentId', e.target.value || '')}
-                placeholder="父任务 ID（可选）"
-              />
+              <label className="form-label">任务链</label>
+              <div style={styles.chainBox}>
+                <select
+                  className="form-select"
+                  value={task.chainParentId || ''}
+                  onChange={(e) => {
+                    const parentId = e.target.value;
+                    setTask((prev) => ({
+                      ...prev,
+                      chainParentId: parentId,
+                      chainTriggerMode: parentId ? prev.chainTriggerMode || 'both' : 'both',
+                    }));
+                  }}
+                >
+                  <option value="">不关联父任务</option>
+                  {availableParentTasks.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name || item.id}
+                    </option>
+                  ))}
+                </select>
+                <div style={styles.segmentedControl}>
+                  {CHAIN_TRIGGER_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      className={`btn btn-sm ${task.chainTriggerMode === mode.value ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => update('chainTriggerMode', mode.value)}
+                      disabled={!task.chainParentId && mode.value === 'chain_only'}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={styles.chainHint}>
+                  {task.chainParentId ? (
+                    <>
+                      {task.chainTriggerMode === 'cron_only'
+                        ? `已关联父任务“${selectedParentTask?.name || task.chainParentId}”，但当前只按本任务自己的定时执行。`
+                        : `父任务“${selectedParentTask?.name || task.chainParentId}”成功后会触发本任务。`}
+                      子任务模板可用
+                      <code style={styles.inlineCode}>{'{{parent_summary}}'}</code>
+                      和
+                      <code style={styles.inlineCode}>{'{{parent_result}}'}</code>
+                      引用父任务输出。
+                    </>
+                  ) : (
+                    '不选择父任务时，本任务只按自己的调度或手动执行。'
+                  )}
+                </div>
+              </div>
             </div>
 
             <label style={styles.checkbox}>
@@ -1505,6 +1571,34 @@ const styles = {
   twoColumnRow: {
     display: 'flex',
     gap: '18px',
+  },
+  chainBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    padding: '12px',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    background: 'var(--surface)',
+  },
+  segmentedControl: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  chainHint: {
+    color: 'var(--ink-secondary)',
+    fontSize: '0.82rem',
+    lineHeight: 1.6,
+  },
+  inlineCode: {
+    margin: '0 4px',
+    padding: '1px 5px',
+    borderRadius: '5px',
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.78rem',
   },
   cronInlineRow: {
     display: 'grid',

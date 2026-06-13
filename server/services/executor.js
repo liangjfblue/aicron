@@ -29,17 +29,24 @@ export class Executor {
     const timeoutSeconds = options.timeoutSeconds ?? task.timeout_seconds;
     const triggerType = options.triggerType || 'manual';
     const startedAt = new Date().toISOString();
+    const chainDepth = options.chainDepth || 0;
 
     // Resolve variables
     const lastRun = this.runSvc.getLatestSuccess(task.id);
+    const parentRun = options.parentRun || null;
     const template = task.prompt_template || task.prompt || '';
     const lastResult = lastRun ? this._readResultFile(lastRun.result_path) : '';
     const lastSummary = lastRun?.summary || '';
+    const parentResult = parentRun ? this._readResultFile(parentRun.result_path) : '';
+    const parentSummary = parentRun?.summary || '';
     const resolvedPrompt = resolveVariables(template, task, {
       now: new Date(),
       runId,
       lastResult,
       lastSummary,
+      parentResult,
+      parentSummary,
+      prevOutput: parentResult,
     });
     const finalPrompt = this._withLastRunContext(resolvedPrompt, task, lastRun, lastResult, lastSummary);
 
@@ -57,6 +64,8 @@ export class Executor {
       engine: task.engine,
       auto_include_last_result: this._shouldIncludeLastResult(task),
       has_last_result: Boolean(lastResult),
+      parent_run_id: parentRun?.id || null,
+      has_parent_result: Boolean(parentResult),
     });
 
     const promise = new Promise((resolve) => {
@@ -128,8 +137,11 @@ export class Executor {
           has_result: Boolean(resultPath),
           failure_reason: failure.reason,
           failure_hint: failure.hint,
+          chain_depth: chainDepth,
         });
         const finalRun = this.runSvc.getById(runId);
+        finalRun.chain_depth = chainDepth;
+        finalRun.parent_run_id = parentRun?.id || null;
         resolve(finalRun);
 
         // Fire-and-forget notification

@@ -128,6 +128,7 @@ export function getTaskScheduleSegments(task) {
 export function scheduleTask(scheduler, task) {
   scheduler.removeJob(task.id);
   if (!task?.enabled) return;
+  if (task.chain_trigger_mode === 'chain_only') return;
   const segments = getTaskScheduleSegments(task);
   if (segments.length) scheduler.addSegments(task.id, segments);
 }

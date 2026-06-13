@@ -25,6 +25,7 @@ const taskSchema = {
       schedule_segments: { type: 'string' },
       timeout_seconds: { type: 'number', nullable: true },
       chain_parent_id: { type: 'string', nullable: true },
+      chain_trigger_mode: { type: 'string', enum: ['cron_only', 'chain_only', 'both'] },
       auto_include_last_result: { type: 'boolean' },
       feishu_mode: { type: 'string', enum: ['full', 'summary'] },
       feishu_chat_ids: { type: 'string' },

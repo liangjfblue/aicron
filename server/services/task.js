@@ -11,6 +11,7 @@ export class TaskService {
     return {
       ...row,
       auto_include_last_result: row.auto_include_last_result === 1,
+      chain_trigger_mode: row.chain_trigger_mode || 'both',
       feishu_chat_ids: JSON.parse(row.feishu_chat_ids || '[]'),
       tags: JSON.parse(row.tags || '[]'),
       schedule_segments: JSON.parse(row.schedule_segments || '[]'),
@@ -23,9 +24,9 @@ export class TaskService {
     this.db.prepare(`
       INSERT INTO tasks (id, name, description, prompt_template, engine, cron_expression,
         active_start_at, active_end_at, schedule_segments,
-        timeout_seconds, chain_parent_id, auto_include_last_result, feishu_mode, feishu_chat_ids,
+        timeout_seconds, chain_parent_id, chain_trigger_mode, auto_include_last_result, feishu_mode, feishu_chat_ids,
         notify_on_change, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       data.name || '',
@@ -38,6 +39,7 @@ export class TaskService {
       data.schedule_segments || '[]',
       data.timeout_seconds ?? null,
       data.chain_parent_id || null,
+      data.chain_trigger_mode || 'both',
       data.auto_include_last_result ? 1 : 0,
       data.feishu_mode || 'full',
       data.feishu_chat_ids || '[]',
@@ -77,6 +79,13 @@ export class TaskService {
     });
   }
 
+  listChainChildren(parentId) {
+    const rows = this.db
+      .prepare('SELECT * FROM tasks WHERE chain_parent_id = ? ORDER BY created_at ASC')
+      .all(parentId);
+    return rows.map((row) => this._parseJsonFields(row));
+  }
+
   getById(id) {
     const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
     return this._parseJsonFields(row);
@@ -86,7 +95,7 @@ export class TaskService {
     const allowed = [
       'name', 'description', 'prompt_template', 'engine', 'cron_expression',
       'active_start_at', 'active_end_at', 'schedule_segments',
-      'timeout_seconds', 'chain_parent_id', 'auto_include_last_result', 'feishu_mode', 'feishu_chat_ids',
+      'timeout_seconds', 'chain_parent_id', 'chain_trigger_mode', 'auto_include_last_result', 'feishu_mode', 'feishu_chat_ids',
       'notify_on_change', 'tags',
     ];
 

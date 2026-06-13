@@ -133,6 +133,31 @@ describe('Task Routes', () => {
     expect(app.executor.executeAsync).toHaveBeenCalledTimes(1);
   });
 
+  it('POST /api/tasks stores chain trigger mode', async () => {
+    const parentSvc = new TaskService(getDb());
+    const parent = parentSvc.create({ name: '父任务', prompt_template: '父', engine: 'claude' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: '子任务',
+        prompt_template: '子 {{parent_result}}',
+        engine: 'claude',
+        chain_parent_id: parent.id,
+        chain_trigger_mode: 'chain_only',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      name: '子任务',
+      chain_parent_id: parent.id,
+      chain_trigger_mode: 'chain_only',
+    });
+  });
+
   it('POST /api/tasks/test-run accepts unsaved task data without creating a persisted run', async () => {
     const binDir = mkdtempSync(join(tmpdir(), 'aicron-test-run-'));
     const cliPath = join(binDir, 'claude');

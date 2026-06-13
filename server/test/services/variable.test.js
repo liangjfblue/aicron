@@ -47,6 +47,19 @@ describe('resolveVariables', () => {
     expect(result).toBe('摘要: 无新财报');
   });
 
+  it('resolves parent task result variables from context', () => {
+    const result = resolveVariables(
+      '父任务摘要: {{parent_summary}}\n父任务结果: {{parent_result}}\n前序: {{prev_output}}',
+      baseTask,
+      {
+        parentSummary: '父任务一句话结论',
+        parentResult: '父任务完整报告',
+      },
+    );
+
+    expect(result).toBe('父任务摘要: 父任务一句话结论\n父任务结果: 父任务完整报告\n前序: 父任务完整报告');
+  });
+
   it('resolves {{run_id}} from context', () => {
     const result = resolveVariables('ID: {{run_id}}', baseTask, { runId: 'run_abc123' });
     expect(result).toBe('ID: run_abc123');

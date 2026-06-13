@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getTaskScheduleSegments, Scheduler } from '../../services/scheduler.js';
+import { getTaskScheduleSegments, scheduleTask, Scheduler } from '../../services/scheduler.js';
 
 describe('Scheduler', () => {
   let scheduler;
@@ -110,5 +110,16 @@ describe('Scheduler', () => {
         activeEndAt: '2027-01-31T23:59',
       },
     ]);
+  });
+
+  it('should not schedule chain-only tasks for cron execution', () => {
+    scheduleTask(scheduler, {
+      id: 'chain-only-task',
+      enabled: true,
+      cron_expression: '*/1 * * * *',
+      chain_trigger_mode: 'chain_only',
+    });
+
+    expect(scheduler.listJobs()).toHaveLength(0);
   });
 });
