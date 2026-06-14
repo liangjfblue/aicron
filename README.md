@@ -1,3 +1,5 @@
+![AICron Agent Prompt 工作台](docs/assets/readme-hero.svg)
+
 # AICron
 
 把成熟的 AI 任务 Prompt，变成会自动运行的桌面任务。
