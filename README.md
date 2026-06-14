@@ -230,8 +230,6 @@ aicron/
 └── docs/             # 文档
 ```
 
-维护者发布流程见 [docs/release-guide.md](docs/release-guide.md)。
-
 ## License
 
 MIT
