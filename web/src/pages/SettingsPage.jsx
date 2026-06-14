@@ -7,9 +7,10 @@ import {
   testFeishu,
 } from '../api/client';
 import { isNewerVersion } from '../utils/version';
+import { selectLatestRelease } from '../utils/releases';
 
 const FALLBACK_APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0';
-const RELEASE_API_URL = 'https://api.github.com/repos/liangjfblue/aicron/releases/latest';
+const RELEASE_API_URL = 'https://api.github.com/repos/liangjfblue/aicron/releases?per_page=10';
 const RELEASES_PAGE_URL = 'https://github.com/liangjfblue/aicron/releases';
 
 export default function SettingsPage() {
@@ -181,10 +182,11 @@ export default function SettingsPage() {
       const res = await fetch(RELEASE_API_URL, {
         headers: { Accept: 'application/vnd.github+json' },
       });
+      if (res.status === 404) throw new Error('无法访问更新源：仓库可能未公开或 Release 不可见');
       if (!res.ok) throw new Error(`检查失败 (${res.status})`);
-      const release = await res.json();
+      const release = selectLatestRelease(await res.json());
+      if (!release) throw new Error('未找到可下载版本');
       const latestVersion = release.tag_name || release.name;
-      if (!latestVersion) throw new Error('未读取到最新版本号');
       const hasUpdate = isNewerVersion(latestVersion, appVersion);
       const downloadUrl = release.html_url || RELEASES_PAGE_URL;
       setUpdateInfo({
